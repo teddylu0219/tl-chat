@@ -11,6 +11,7 @@ export const chatRequestSchema = z.object({
     .trim()
     .min(1, "A model is required.")
     .catch(DEFAULT_MODEL_ID),
+  systemPrompt: z.string().optional(),
 });
 
 export type ChatRequest = z.infer<typeof chatRequestSchema>;

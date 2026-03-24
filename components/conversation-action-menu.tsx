@@ -4,6 +4,8 @@ import {
   Archive,
   Download,
   Ellipsis,
+  Pin,
+  PinOff,
   SquarePen,
   Trash2,
   Undo2,
@@ -13,6 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   getDisplayTitle,
   isArchivedConversation,
+  isPinnedConversation,
 } from "@/lib/conversations";
 import type { ConversationRecord } from "@/lib/persistence";
 
@@ -24,6 +27,7 @@ type ConversationActionMenuProps = {
   onArchiveToggle: (conversation: ConversationRecord) => void;
   onDelete: (conversation: ConversationRecord) => void;
   onExport?: (conversation: ConversationRecord) => void;
+  onPinToggle?: (conversation: ConversationRecord) => void;
   onRename: (conversation: ConversationRecord) => void;
   triggerTestId?: string;
 };
@@ -36,12 +40,14 @@ export function ConversationActionMenu({
   onArchiveToggle,
   onDelete,
   onExport,
+  onPinToggle,
   onRename,
   triggerTestId,
 }: ConversationActionMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const isArchived = isArchivedConversation(conversation);
+  const isPinned = isPinnedConversation(conversation);
   const isInline = layout === "inline";
   const actionButtonClass =
     "flex w-full items-center gap-3 rounded-[14px] px-3 py-2 text-left text-[12px] text-[color:var(--foreground)] transition hover:bg-[color:var(--surface-muted)]";
@@ -92,6 +98,17 @@ export function ConversationActionMenu({
               : `${menuClass} absolute right-0 top-9 z-30 min-w-44`
           }`}
         >
+          {onPinToggle ? (
+            <button
+              className={actionButtonClass}
+              data-testid={itemTestIdPrefix ? `${itemTestIdPrefix}-pin` : undefined}
+              type="button"
+              onClick={() => closeAndRun(() => onPinToggle(conversation))}
+            >
+              {isPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+              {isPinned ? "Unpin" : "Pin"}
+            </button>
+          ) : null}
           <button
             className={actionButtonClass}
             data-testid={itemTestIdPrefix ? `${itemTestIdPrefix}-rename` : undefined}

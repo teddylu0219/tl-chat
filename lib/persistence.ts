@@ -2,20 +2,26 @@ import type { UIMessage } from "ai";
 import { openDB, type DBSchema } from "idb";
 
 import { DEFAULT_THEME, type ThemePreference } from "./app-config";
+import type { CouncilMessageMeta } from "./council";
 import { getPreviewText, sortConversations } from "./conversations";
+import type { MemoryEntry } from "./memory";
 import { DEFAULT_MODEL_ID } from "./models";
 
 const DATABASE_NAME = "own-ai-chat";
-const DATABASE_VERSION = 2;
+const DATABASE_VERSION = 3;
 const SETTINGS_KEY = "local-settings";
 
 export type ConversationRecord = {
   archivedAt?: string | null;
+  councilHostModelId?: string | null;
+  councilMeta?: CouncilMessageMeta[];
+  councilModelIds?: string[];
   createdAt: string;
   draft: string;
   id: string;
   manualTitle?: string | null;
   messages: UIMessage[];
+  mode?: "standard" | "council";
   modelId: string;
   pinnedAt?: string | null;
   previewText: string;
@@ -36,6 +42,10 @@ type OwnAiChatSchema = DBSchema & {
     indexes: { "by-updatedAt": string };
     key: string;
     value: ConversationRecord;
+  };
+  memories: {
+    key: string;
+    value: MemoryEntry;
   };
   settings: {
     key: string;
@@ -59,7 +69,9 @@ function normalizeConversationRecord(
   return {
     ...conversation,
     archivedAt: conversation.archivedAt ?? null,
+    councilHostModelId: conversation.councilHostModelId ?? null,
     manualTitle: conversation.manualTitle?.trim() || null,
+    mode: conversation.mode ?? "standard",
     pinnedAt: conversation.pinnedAt ?? null,
     previewText: derivedPreviewText || conversation.previewText || "",
   };
@@ -78,6 +90,10 @@ async function openChatDatabase() {
 
       if (!database.objectStoreNames.contains("settings")) {
         database.createObjectStore("settings");
+      }
+
+      if (!database.objectStoreNames.contains("memories")) {
+        database.createObjectStore("memories", { keyPath: "id" });
       }
 
       if (oldVersion < 2) {
@@ -195,6 +211,33 @@ export async function deleteConversationPermanent(conversationId: string) {
   await database.delete("conversations", conversationId);
 }
 
+// --- Memory CRUD ---
+
+export async function listMemories(): Promise<MemoryEntry[]> {
+  const database = await openChatDatabase();
+
+  return database.getAll("memories");
+}
+
+export async function saveMemory(entry: MemoryEntry): Promise<MemoryEntry> {
+  const database = await openChatDatabase();
+  await database.put("memories", entry);
+
+  return entry;
+}
+
+export async function deleteMemory(id: string): Promise<void> {
+  const database = await openChatDatabase();
+  await database.delete("memories", id);
+}
+
+export async function clearMemories(): Promise<void> {
+  const database = await openChatDatabase();
+  await database.clear("memories");
+}
+
+// --- Settings ---
+
 export async function getSettings() {
   const database = await openChatDatabase();
   const settings = await database.get("settings", SETTINGS_KEY);
@@ -216,4 +259,5 @@ export async function clearPersistence() {
   const database = await openChatDatabase();
   await database.clear("conversations");
   await database.clear("settings");
+  await database.clear("memories");
 }

@@ -71,6 +71,7 @@ export async function POST(request: Request) {
 
     const result = streamText({
       model: provider(body.modelId),
+      system: body.systemPrompt || undefined,
       messages: modelMessages,
     });
 

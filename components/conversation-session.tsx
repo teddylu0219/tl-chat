@@ -5,10 +5,13 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 import {
   ArrowUp,
   Check,
+  ChevronDown,
   CornerDownRight,
   Copy,
   LoaderCircle,
   Menu,
+  Mic,
+  MicOff,
   RefreshCcw,
   Settings2,
   Sparkles,
@@ -17,36 +20,81 @@ import {
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import {
+  memo,
+  useDeferredValue,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from "react";
 import remarkGfm from "remark-gfm";
 
 import { ConversationActionMenu } from "@/components/conversation-action-menu";
+import { useToast } from "@/components/toast";
 import { APP_NAME } from "@/lib/app-config";
 import {
   deriveConversationTitle,
   getDisplayTitle,
+  isMessageStreaming,
   getMessageText,
 } from "@/lib/conversations";
+import {
+  createMemoryEntry,
+  extractMemoriesFromResponse,
+  extractMemoriesFromUserInput,
+  formatMemoriesAsSystemPrompt,
+  isDuplicateMemory,
+  type MemoryEntry,
+} from "@/lib/memory";
 import { getModelOption, getModelOptions } from "@/lib/models";
 import type { ConversationRecord } from "@/lib/persistence";
+import { useSpeechRecognition } from "@/lib/use-speech-recognition";
 
 type ConversationSessionProps = {
   conversation: ConversationRecord;
   customModelId: string;
+  memories: MemoryEntry[];
+  onAutoMemory?: (entry: MemoryEntry) => void;
   onConversationChange: (conversation: ConversationRecord) => void;
   onDeleteConversation: (conversation: ConversationRecord) => void;
   onExportConversation: (conversation: ConversationRecord) => void;
   onOpenSettings: () => void;
+  onPinToggle?: (conversation: ConversationRecord) => void;
   onRenameConversation: (conversation: ConversationRecord) => void;
   onToggleArchiveConversation: (conversation: ConversationRecord) => void;
   onToggleSidebar: () => void;
   openRouterApiKey: string;
 };
 
+const CHAT_STREAM_THROTTLE_MS = 120;
+const LARGE_MESSAGE_RICH_RENDER_THRESHOLD = 2400;
+
 function extractCodeLanguage(className?: string) {
   const match = /language-([\w-]+)/.exec(className ?? "");
 
   return match?.[1] ?? null;
+}
+
+function createNewMemoryEntries(
+  existing: MemoryEntry[],
+  contents: string[],
+): MemoryEntry[] {
+  const seen = new Set(existing.map((entry) => entry.content.toLowerCase().trim()));
+  const entries: MemoryEntry[] = [];
+
+  for (const content of contents) {
+    const normalized = content.toLowerCase().trim();
+
+    if (seen.has(normalized) || isDuplicateMemory(existing, content)) {
+      continue;
+    }
+
+    seen.add(normalized);
+    entries.push(createMemoryEntry(content));
+  }
+
+  return entries;
 }
 
 function CopyTextButton({
@@ -61,6 +109,7 @@ function CopyTextButton({
   variant?: "pill" | "icon";
 }>) {
   const [copied, setCopied] = useState(false);
+  const { showToast } = useToast();
 
   useEffect(() => {
     if (!copied) {
@@ -76,6 +125,7 @@ function CopyTextButton({
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
+      showToast("Copied to clipboard");
     } catch {
       setCopied(false);
     }
@@ -103,7 +153,7 @@ function CopyTextButton({
   );
 }
 
-function CodeBlock({
+const CodeBlock = memo(function CodeBlock({
   code,
   language,
 }: Readonly<{
@@ -146,9 +196,29 @@ function CodeBlock({
       </SyntaxHighlighter>
     </div>
   );
-}
+});
 
-function MarkdownMessage({ text }: { text: string }) {
+const MarkdownMessage = memo(function MarkdownMessage({
+  text,
+  mode = "rich",
+}: {
+  text: string;
+  mode?: "rich" | "streaming";
+}) {
+  const deferredText = useDeferredValue(text);
+  const renderPlainText =
+    mode === "streaming" ||
+    (text.length >= LARGE_MESSAGE_RICH_RENDER_THRESHOLD && deferredText !== text);
+  const renderedText = renderPlainText ? text : deferredText;
+
+  if (renderPlainText) {
+    return (
+      <div className="whitespace-pre-wrap break-words text-[14px] leading-7 text-inherit sm:text-[14.5px]">
+        {renderedText}
+      </div>
+    );
+  }
+
   return (
     <div className="markdown-content text-[14px] leading-7 text-inherit sm:text-[14.5px]">
       <ReactMarkdown
@@ -270,15 +340,43 @@ function MarkdownMessage({ text }: { text: string }) {
         }}
         remarkPlugins={[remarkGfm]}
       >
-        {text}
+        {renderedText}
       </ReactMarkdown>
+    </div>
+  );
+});
+
+function ThinkingIndicator() {
+  return (
+    <div className="mx-auto flex w-full max-w-[940px] justify-start animate-[message-rise_220ms_ease-out]">
+      <div className="max-w-[min(100%,840px)] px-0 py-0.5">
+        <p className="mb-2 px-0.5 text-[10px] uppercase tracking-[0.22em] text-[color:var(--muted-foreground)]">
+          Assistant
+        </p>
+        <div className="flex items-center gap-1.5 px-1 py-2">
+          <span className="h-2 w-2 rounded-full bg-[color:var(--accent)] animate-[thinking-dot_1.4s_ease-in-out_infinite]" />
+          <span className="h-2 w-2 rounded-full bg-[color:var(--accent)] animate-[thinking-dot_1.4s_ease-in-out_0.2s_infinite]" />
+          <span className="h-2 w-2 rounded-full bg-[color:var(--accent)] animate-[thinking-dot_1.4s_ease-in-out_0.4s_infinite]" />
+        </div>
+      </div>
     </div>
   );
 }
 
-function MessageBubble({ message }: { message: UIMessage }) {
-  const text = getMessageText(message);
+function MessageBubble({
+  message,
+  modelLabel,
+  onRegenerate,
+}: {
+  message: UIMessage;
+  modelLabel?: string;
+  onRegenerate?: () => void;
+}) {
+  const rawText = getMessageText(message);
   const isUser = message.role === "user";
+  const isStreaming = !isUser && isMessageStreaming(message);
+  // Strip <memory> tags from display
+  const text = isUser ? rawText : extractMemoriesFromResponse(rawText).cleanText;
 
   return (
     <article
@@ -288,7 +386,7 @@ function MessageBubble({ message }: { message: UIMessage }) {
       <div
         className={`${
           isUser
-            ? "max-w-[min(100%,560px)] rounded-[22px] bg-[color:var(--accent)] px-3.5 py-2.5 text-white shadow-[0_12px_24px_rgba(122,96,73,0.14)]"
+            ? "max-w-[min(100%,560px)] rounded-[22px] bg-[color:var(--user-bubble)] px-3.5 py-2.5 text-white shadow-[0_12px_24px_rgba(122,96,73,0.14)]"
             : "max-w-[min(100%,840px)] px-0 py-0.5 text-[color:var(--foreground)]"
         }`}
       >
@@ -298,18 +396,40 @@ function MessageBubble({ message }: { message: UIMessage }) {
               isUser ? "text-white/70" : "text-[color:var(--muted-foreground)]"
             }`}
           >
-            {isUser ? "You" : "Assistant"}
+            {isUser ? "You" : modelLabel ?? "Assistant"}
           </p>
-          {text ? (
+          {isUser && text ? (
             <CopyTextButton
-              label={isUser ? "Copy prompt" : "Copy answer"}
+              label="Copy prompt"
               text={text}
-              tone={isUser ? "inverse" : "default"}
+              tone="inverse"
               variant="icon"
             />
           ) : null}
         </div>
-        <MarkdownMessage text={text} />
+        <MarkdownMessage
+          mode={isStreaming ? "streaming" : "rich"}
+          text={text}
+        />
+        {!isUser && text && !isStreaming ? (
+          <div className="mt-2 flex items-center gap-1 px-0.5 opacity-0 transition-opacity duration-180 group-hover:opacity-100">
+            <CopyTextButton
+              label="Copy answer"
+              text={text}
+              variant="icon"
+            />
+            {onRegenerate ? (
+              <button
+                aria-label="Regenerate response"
+                className="message-copy-button message-copy-button-compact flex h-7 w-7 items-center justify-center rounded-full bg-[color:var(--surface-muted)] text-[color:var(--muted-foreground)] transition hover:text-[color:var(--foreground)]"
+                type="button"
+                onClick={onRegenerate}
+              >
+                <RefreshCcw className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </article>
   );
@@ -318,10 +438,13 @@ function MessageBubble({ message }: { message: UIMessage }) {
 export function ConversationSession({
   conversation,
   customModelId,
+  memories,
+  onAutoMemory,
   onConversationChange,
   onDeleteConversation,
   onExportConversation,
   onOpenSettings,
+  onPinToggle,
   onRenameConversation,
   onToggleArchiveConversation,
   onToggleSidebar,
@@ -330,11 +453,24 @@ export function ConversationSession({
   const [draft, setDraft] = useState(conversation.draft);
   const [gateError, setGateError] = useState<string | null>(null);
   const [modelId, setModelId] = useState(conversation.modelId);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const isAutoScrolling = useRef(false);
+  const isNearBottom = useRef(true);
   const messageContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [transport] = useState(
     () => new DefaultChatTransport<UIMessage>({ api: "/api/chat" }),
   );
+  const processedMemoryMessageIdRef = useRef<string | null>(null);
+
+  const {
+    isListening,
+    isSupported: isSpeechSupported,
+    startListening,
+    stopListening,
+    transcript,
+    error: speechError,
+  } = useSpeechRecognition();
 
   const {
     clearError,
@@ -345,7 +481,7 @@ export function ConversationSession({
     status,
     stop,
   } = useChat({
-    experimental_throttle: 50,
+    experimental_throttle: CHAT_STREAM_THROTTLE_MS,
     id: conversation.id,
     messages: conversation.messages,
     transport,
@@ -379,34 +515,102 @@ export function ConversationSession({
   const scrollToLatest = useEffectEvent(() => {
     const container = messageContainerRef.current;
 
-    if (!container) {
+    if (!container || !isNearBottom.current) {
       return;
     }
 
+    isAutoScrolling.current = true;
     container.scrollTo({
       top: container.scrollHeight,
       behavior: status === "ready" ? "smooth" : "auto",
     });
+    requestAnimationFrame(() => {
+      isAutoScrolling.current = false;
+    });
   });
+
+  function handleScroll() {
+    const container = messageContainerRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
+    isNearBottom.current = nearBottom;
+
+    if (!isAutoScrolling.current) {
+      setShowScrollButton(!nearBottom && messages.length > 0);
+    }
+  }
+
+  function scrollToBottom() {
+    const container = messageContainerRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    isNearBottom.current = true;
+    setShowScrollButton(false);
+  }
 
   useEffect(() => {
     resizeTextarea();
   }, [draft]);
 
   useEffect(() => {
+    if (status === "submitted") {
+      isNearBottom.current = true;
+    }
+
     scrollToLatest();
   }, [messages, status]);
 
+  // Sync on draft/model/status changes — intentionally excludes `messages` to avoid
+  // cascading re-renders during streaming. syncConversation (useEffectEvent) reads
+  // the latest messages automatically; the final sync fires when status → "ready".
   useEffect(() => {
     syncConversation(draft, messages);
-  }, [draft, messages, modelId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, modelId, status]);
+
+  // Auto-extract memories from completed assistant responses
+  useEffect(() => {
+    if (status !== "ready" || !onAutoMemory) {
+      return;
+    }
+
+    const lastMessage = messages.at(-1);
+
+    if (!lastMessage || lastMessage.role !== "assistant") {
+      return;
+    }
+
+    if (processedMemoryMessageIdRef.current === lastMessage.id) {
+      return;
+    }
+
+    processedMemoryMessageIdRef.current = lastMessage.id;
+
+    const text = getMessageText(lastMessage);
+    const { memories: newMemories } = extractMemoriesFromResponse(text);
+
+    for (const entry of createNewMemoryEntries(memories, newMemories)) {
+      onAutoMemory(entry);
+    }
+  }, [memories, messages, onAutoMemory, status]);
 
   const modelOptions = getModelOptions(customModelId);
   const currentModel =
     getModelOption(modelId, customModelId) ??
     modelOptions[0];
-  const activeError = gateError ?? error?.message;
+  const activeError = gateError ?? error?.message ?? (speechError || null);
   const isStreaming = status === "streaming" || status === "submitted";
+
+  // Build system prompt from memories
+  const systemPrompt = formatMemoriesAsSystemPrompt(memories);
 
   async function handleSubmit(textOverride?: string) {
     const nextText = (textOverride ?? draft).trim();
@@ -423,6 +627,16 @@ export function ConversationSession({
 
     clearError();
     setGateError(null);
+
+    if (onAutoMemory) {
+      for (const entry of createNewMemoryEntries(
+        memories,
+        extractMemoriesFromUserInput(nextText),
+      )) {
+        onAutoMemory(entry);
+      }
+    }
+
     setDraft("");
 
     try {
@@ -432,12 +646,30 @@ export function ConversationSession({
           body: {
             apiKey: openRouterApiKey.trim(),
             modelId,
+            systemPrompt: systemPrompt || undefined,
           },
         },
       );
     } catch {
       setDraft(nextText);
     }
+  }
+
+  async function handleRegenerate() {
+    if (!openRouterApiKey.trim() || isStreaming) {
+      return;
+    }
+
+    clearError();
+    setGateError(null);
+
+    await regenerate({
+      body: {
+        apiKey: openRouterApiKey.trim(),
+        modelId,
+        systemPrompt: systemPrompt || undefined,
+      },
+    });
   }
 
   async function handleRetry() {
@@ -467,6 +699,7 @@ export function ConversationSession({
           body: {
             apiKey: openRouterApiKey.trim(),
             modelId,
+            systemPrompt: systemPrompt || undefined,
           },
         },
       );
@@ -477,8 +710,20 @@ export function ConversationSession({
       body: {
         apiKey: openRouterApiKey.trim(),
         modelId,
+        systemPrompt: systemPrompt || undefined,
       },
     });
+  }
+
+  function handleVoiceToggle() {
+    if (isListening) {
+      const text = stopListening();
+      if (text.trim()) {
+        setDraft((prev) => (prev ? `${prev} ${text}` : text));
+      }
+    } else {
+      startListening();
+    }
   }
 
   return (
@@ -548,16 +793,19 @@ export function ConversationSession({
             onArchiveToggle={onToggleArchiveConversation}
             onDelete={onDeleteConversation}
             onExport={onExportConversation}
+            onPinToggle={onPinToggle}
             onRename={onRenameConversation}
             triggerTestId="active-conversation-actions"
           />
         </div>
       </header>
 
+      <div className="relative min-h-0 flex-1">
       <div
         ref={messageContainerRef}
-        className="scroll-column min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-10 sm:py-8"
+        className="scroll-column h-full overflow-y-auto px-5 py-6 sm:px-10 sm:py-8"
         data-testid="message-list"
+        onScroll={handleScroll}
       >
         {messages.length === 0 ? (
           <div className="flex min-h-full flex-col items-center justify-center text-center">
@@ -607,9 +855,23 @@ export function ConversationSession({
           </div>
         ) : (
           <div className="space-y-8">
-            {messages.map((message) => (
-              <MessageBubble key={message.id} message={message} />
-            ))}
+            {messages.map((message, index) => {
+              const isLastAssistant =
+                message.role === "assistant" &&
+                index === messages.length - 1 &&
+                !isStreaming;
+
+              return (
+                <MessageBubble
+                  key={message.id}
+                  message={message}
+                  modelLabel={message.role === "assistant" ? currentModel.label : undefined}
+                  onRegenerate={isLastAssistant ? () => void handleRegenerate() : undefined}
+                />
+              );
+            })}
+
+            {status === "submitted" ? <ThinkingIndicator /> : null}
 
             {activeError ? (
               <div className="mx-auto max-w-[min(100%,760px)] rounded-[22px] border border-[color:var(--danger)]/30 bg-[color:var(--surface-strong)] px-4 py-4 text-left">
@@ -640,8 +902,27 @@ export function ConversationSession({
         )}
       </div>
 
+      {showScrollButton ? (
+        <button
+          aria-label="Scroll to bottom"
+          className="absolute bottom-4 left-1/2 z-10 flex h-9 w-9 -translate-x-1/2 animate-[fade-in-up_180ms_ease-out] items-center justify-center rounded-full border border-[color:var(--border)] bg-[color:var(--surface-strong)] text-[color:var(--muted-foreground)] shadow-lg transition hover:text-[color:var(--foreground)]"
+          type="button"
+          onClick={scrollToBottom}
+        >
+          <ChevronDown className="h-4 w-4" />
+        </button>
+      ) : null}
+      </div>
+
       <div className="border-t border-[color:var(--border)] p-3.5 sm:px-6 sm:py-4">
         <div className="mx-auto max-w-[920px] rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface-strong)] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]">
+          {/* Voice transcript preview */}
+          {isListening && transcript ? (
+            <div className="mb-2 px-2.5 text-[13px] italic text-[color:var(--muted-foreground)]">
+              {transcript}
+            </div>
+          ) : null}
+
           <textarea
             ref={textareaRef}
             className="min-h-[54px] w-full resize-none bg-transparent px-2.5 py-2 text-[14px] leading-6 text-[color:var(--foreground)] outline-none placeholder:text-[color:var(--muted-foreground)]"
@@ -677,9 +958,34 @@ export function ConversationSession({
               <span className="rounded-full bg-[color:var(--surface-muted)] px-2 py-1">
                 {isStreaming ? "Streaming..." : "Saved locally"}
               </span>
+              {memories.length > 0 ? (
+                <span className="rounded-full bg-[color:var(--surface-muted)] px-2 py-1">
+                  {memories.length} memories
+                </span>
+              ) : null}
             </div>
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2">
+              {/* Voice input button */}
+              {isSpeechSupported ? (
+                <button
+                  aria-label={isListening ? "Stop recording" : "Voice input"}
+                  className={`flex h-9 w-9 items-center justify-center rounded-full transition ${
+                    isListening
+                      ? "bg-red-500/15 text-red-500 animate-[voice-pulse_1.5s_ease-in-out_infinite]"
+                      : "text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)]"
+                  }`}
+                  type="button"
+                  onClick={handleVoiceToggle}
+                >
+                  {isListening ? (
+                    <MicOff className="h-4 w-4" />
+                  ) : (
+                    <Mic className="h-4 w-4" />
+                  )}
+                </button>
+              ) : null}
+
               <button
                 className="flex items-center gap-1.5 text-[13px] text-[color:var(--muted-foreground)] transition hover:text-[color:var(--foreground)]"
                 type="button"

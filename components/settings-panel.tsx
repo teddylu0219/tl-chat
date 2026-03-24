@@ -3,7 +3,9 @@
 import { Eye, EyeOff, KeyRound, RotateCcw, Save, X } from "lucide-react";
 import { useState } from "react";
 
+import { MemoryManager } from "@/components/memory-manager";
 import { formatConversationTimestamp, getDisplayTitle } from "@/lib/conversations";
+import type { MemoryEntry } from "@/lib/memory";
 import { THEME_OPTIONS } from "@/lib/app-config";
 import { getModelOptions } from "@/lib/models";
 import type { ConversationRecord, LocalSettings } from "@/lib/persistence";
@@ -11,8 +13,12 @@ import type { ConversationRecord, LocalSettings } from "@/lib/persistence";
 type SettingsPanelProps = {
   archivedConversations: ConversationRecord[];
   isOpen: boolean;
+  memories: MemoryEntry[];
   modelId: string;
+  onAddMemory: (entry: MemoryEntry) => void;
+  onClearMemories: () => void;
   onClose: () => void;
+  onDeleteMemory: (id: string) => void;
   onRestoreConversation: (conversation: ConversationRecord) => void;
   onSave: (settings: LocalSettings) => void | Promise<void>;
   settings: LocalSettings;
@@ -21,8 +27,12 @@ type SettingsPanelProps = {
 export function SettingsPanel({
   archivedConversations,
   isOpen,
+  memories,
   modelId,
+  onAddMemory,
+  onClearMemories,
   onClose,
+  onDeleteMemory,
   onRestoreConversation,
   onSave,
   settings,
@@ -181,6 +191,13 @@ export function SettingsPanel({
               }
             />
           </label>
+
+          <MemoryManager
+            memories={memories}
+            onAddMemory={onAddMemory}
+            onClearAll={onClearMemories}
+            onDeleteMemory={onDeleteMemory}
+          />
 
           <section className="rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface-strong)] p-5">
             <div className="flex items-center justify-between gap-3">

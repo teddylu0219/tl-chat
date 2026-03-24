@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Search, Settings2, X } from "lucide-react";
+import { MessagesSquare, Pin, Plus, Search, Settings2, X } from "lucide-react";
 import { type KeyboardEvent } from "react";
 
 import { ConversationActionMenu } from "@/components/conversation-action-menu";
@@ -8,6 +8,8 @@ import { APP_NAME } from "@/lib/app-config";
 import {
   formatConversationTimestamp,
   getDisplayTitle,
+  groupConversationsByDate,
+  isPinnedConversation,
 } from "@/lib/conversations";
 import type { ConversationRecord } from "@/lib/persistence";
 
@@ -51,6 +53,70 @@ function handleThreadListKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
   items[targetIndex]?.focus();
 }
 
+function ThreadCard({
+  activeConversationId,
+  conversation,
+  onArchiveToggle,
+  onConversationSelect,
+  onDeleteConversation,
+  onPinToggle,
+  onRenameConversation,
+}: {
+  activeConversationId: string;
+  conversation: ConversationRecord;
+  onArchiveToggle: (conversation: ConversationRecord) => void;
+  onConversationSelect: (conversationId: string) => void;
+  onDeleteConversation: (conversation: ConversationRecord) => void;
+  onPinToggle?: (conversation: ConversationRecord) => void;
+  onRenameConversation: (conversation: ConversationRecord) => void;
+}) {
+  const isActive = conversation.id === activeConversationId;
+  const isPinned = isPinnedConversation(conversation);
+
+  return (
+    <div
+      className={`thread-card group rounded-[20px] border px-3.5 py-3 ${
+        isActive
+          ? "border-[color:var(--border-strong)] bg-[color:var(--surface-strong)]"
+          : "border-transparent bg-[color:var(--surface-muted)] hover:border-[color:var(--border)]"
+      }`}
+      data-active={isActive}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <button
+          aria-current={isActive ? "page" : undefined}
+          className="thread-card-button min-w-0 flex-1 text-left outline-none"
+          data-testid={`conversation-item-${conversation.id}`}
+          type="button"
+          onClick={() => onConversationSelect(conversation.id)}
+          onKeyDown={handleThreadListKeyDown}
+        >
+          <p className="flex items-center gap-1.5 truncate text-[14px] font-medium text-[color:var(--foreground)] transition-colors duration-200 group-hover:text-[color:var(--accent-strong)]">
+            {conversation.mode === "council" ? <MessagesSquare className="h-3 w-3 shrink-0 text-[color:var(--accent-strong)]" /> : null}
+            {isPinned ? <Pin className="h-3 w-3 shrink-0 text-[color:var(--accent-strong)]" /> : null}
+            <span className="truncate">{getDisplayTitle(conversation)}</span>
+          </p>
+          <p className="mt-1 line-clamp-1 text-[12px] leading-5 text-[color:var(--muted-foreground)]">
+            {conversation.previewText || "No messages yet"}
+          </p>
+          <p className="mt-2 text-[10px] text-[color:var(--muted-foreground)]">
+            {formatConversationTimestamp(conversation.updatedAt)}
+          </p>
+        </button>
+
+        <ConversationActionMenu
+          conversation={conversation}
+          layout="inline"
+          onArchiveToggle={onArchiveToggle}
+          onDelete={onDeleteConversation}
+          onPinToggle={onPinToggle}
+          onRename={onRenameConversation}
+        />
+      </div>
+    </div>
+  );
+}
+
 type ChatSidebarProps = {
   activeConversationId: string;
   conversations: ConversationRecord[];
@@ -58,7 +124,9 @@ type ChatSidebarProps = {
   onConversationSelect: (conversationId: string) => void;
   onDeleteConversation: (conversation: ConversationRecord) => void;
   onNewConversation: () => void;
+  onNewCouncil?: () => void;
   onOpenSettings: () => void;
+  onPinToggle?: (conversation: ConversationRecord) => void;
   onRequestClose?: () => void;
   onRenameConversation: (conversation: ConversationRecord) => void;
   onSearchChange: (value: string) => void;
@@ -72,13 +140,16 @@ export function ChatSidebar({
   onConversationSelect,
   onDeleteConversation,
   onNewConversation,
+  onNewCouncil,
   onOpenSettings,
+  onPinToggle,
   onRequestClose,
   onRenameConversation,
   onSearchChange,
   searchQuery,
 }: ChatSidebarProps) {
   const hasSearchQuery = searchQuery.trim().length > 0;
+  const groups = hasSearchQuery ? null : groupConversationsByDate(conversations);
 
   return (
     <aside
@@ -141,15 +212,6 @@ export function ChatSidebar({
             </button>
           ) : null}
         </div>
-
-        <div className="mt-3 flex items-center justify-between px-1">
-          <p className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--muted-foreground)]">
-            Threads
-          </p>
-          <span className="text-[10px] text-[color:var(--muted-foreground)]">
-            {conversations.length}
-          </span>
-        </div>
       </div>
 
       <div className="scroll-column mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
@@ -159,57 +221,63 @@ export function ChatSidebar({
               ? "No threads match this search."
               : "Start a new chat to build your first thread."}
           </div>
+        ) : groups ? (
+          <div className="space-y-4">
+            {groups.map((group) => (
+              <div key={group.label}>
+                <div className="flex items-center justify-between px-1 pb-2">
+                  <p className="text-[10px] uppercase tracking-[0.22em] text-[color:var(--muted-foreground)]">
+                    {group.label}
+                  </p>
+                  <span className="text-[10px] text-[color:var(--muted-foreground)]">
+                    {group.conversations.length}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {group.conversations.map((conversation) => (
+                    <ThreadCard
+                      key={conversation.id}
+                      activeConversationId={activeConversationId}
+                      conversation={conversation}
+                      onArchiveToggle={onArchiveToggle}
+                      onConversationSelect={onConversationSelect}
+                      onDeleteConversation={onDeleteConversation}
+                      onPinToggle={onPinToggle}
+                      onRenameConversation={onRenameConversation}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
           <div className="space-y-2">
-            {conversations.map((conversation) => {
-              const isActive = conversation.id === activeConversationId;
-
-              return (
-                <div
-                  key={conversation.id}
-                  className={`thread-card group rounded-[20px] border px-3.5 py-3 ${
-                    isActive
-                      ? "border-[color:var(--border-strong)] bg-[color:var(--surface-strong)]"
-                      : "border-transparent bg-[color:var(--surface-muted)] hover:border-[color:var(--border)]"
-                  }`}
-                  data-active={isActive}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <button
-                      aria-current={isActive ? "page" : undefined}
-                      className="thread-card-button min-w-0 flex-1 text-left outline-none"
-                      data-testid={`conversation-item-${conversation.id}`}
-                      type="button"
-                      onClick={() => onConversationSelect(conversation.id)}
-                      onKeyDown={handleThreadListKeyDown}
-                    >
-                      <p className="truncate text-[14px] font-medium text-[color:var(--foreground)] transition-colors duration-200 group-hover:text-[color:var(--accent-strong)]">
-                        {getDisplayTitle(conversation)}
-                      </p>
-                      <p className="mt-1 line-clamp-1 text-[12px] leading-5 text-[color:var(--muted-foreground)]">
-                        {conversation.previewText || "No messages yet"}
-                      </p>
-                      <p className="mt-2 text-[10px] text-[color:var(--muted-foreground)]">
-                        {formatConversationTimestamp(conversation.updatedAt)}
-                      </p>
-                    </button>
-
-                    <ConversationActionMenu
-                      conversation={conversation}
-                      layout="inline"
-                      onArchiveToggle={onArchiveToggle}
-                      onDelete={onDeleteConversation}
-                      onRename={onRenameConversation}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+            {conversations.map((conversation) => (
+              <ThreadCard
+                key={conversation.id}
+                activeConversationId={activeConversationId}
+                conversation={conversation}
+                onArchiveToggle={onArchiveToggle}
+                onConversationSelect={onConversationSelect}
+                onDeleteConversation={onDeleteConversation}
+                onRenameConversation={onRenameConversation}
+              />
+            ))}
           </div>
         )}
       </div>
 
-      <div className="mt-3.5 border-t border-[color:var(--border)] pt-3.5">
+      <div className="mt-3.5 space-y-1 border-t border-[color:var(--border)] pt-3.5">
+        {onNewCouncil ? (
+          <button
+            className="motion-lift flex w-full items-center justify-between rounded-2xl px-2 py-2 text-[13px] text-[color:var(--foreground)] transition hover:text-[color:var(--accent-strong)]"
+            type="button"
+            onClick={onNewCouncil}
+          >
+            New council
+            <MessagesSquare className="h-4 w-4" />
+          </button>
+        ) : null}
         <button
           className="motion-lift flex w-full items-center justify-between rounded-2xl px-2 py-2 text-[13px] text-[color:var(--foreground)] transition hover:text-[color:var(--accent-strong)]"
           data-testid="open-settings-button"

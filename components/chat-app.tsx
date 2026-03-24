@@ -5,27 +5,37 @@ import { useEffect, useEffectEvent, useState } from "react";
 
 import { DeleteConversationDialog, RenameConversationDialog } from "@/components/thread-dialogs";
 import { ConversationSession } from "@/components/conversation-session";
+import { CouncilSession } from "@/components/council-session";
 import { ChatSidebar } from "@/components/chat-sidebar";
 import { SettingsPanel } from "@/components/settings-panel";
+import { ToastProvider, useToast } from "@/components/toast";
 import {
   createConversationRecord,
   exportConversationAsMarkdown,
   getDisplayTitle,
   hasConversationContent,
   isArchivedConversation,
+  isPinnedConversation,
   matchesConversationSearch,
   sortConversations,
 } from "@/lib/conversations";
+import { isDuplicateMemory, type MemoryEntry } from "@/lib/memory";
 import { DEFAULT_SETTINGS, type ConversationRecord, type LocalSettings } from "@/lib/persistence";
 import {
   archiveConversation,
+  clearMemories,
   deleteConversationPermanent,
+  deleteMemory,
   getSettings,
   listConversations,
+  listMemories,
+  pinConversation,
   renameConversation,
   restoreConversation,
   saveConversation,
+  saveMemory,
   saveSettings,
+  unpinConversation,
 } from "@/lib/persistence";
 
 function upsertConversation(
@@ -58,7 +68,17 @@ function findFallbackConversation(
 }
 
 export function ChatApp() {
+  return (
+    <ToastProvider>
+      <ChatAppInner />
+    </ToastProvider>
+  );
+}
+
+function ChatAppInner() {
+  const { showToast } = useToast();
   const [conversations, setConversations] = useState<ConversationRecord[]>([]);
+  const [memories, setMemories] = useState<MemoryEntry[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(
     null,
   );
@@ -86,9 +106,10 @@ export function ChatApp() {
 
   useEffect(() => {
     async function loadLocalState() {
-      const [storedSettings, storedConversations] = await Promise.all([
+      const [storedSettings, storedConversations, storedMemories] = await Promise.all([
         getSettings(),
         listConversations(),
+        listMemories(),
       ]);
       const nextConversations =
         storedConversations.length > 0
@@ -104,6 +125,7 @@ export function ChatApp() {
 
       setSettings(storedSettings);
       setConversations(nextConversations);
+      setMemories(storedMemories);
       setActiveConversationId(
         nextConversations.find(
           (conversation) => conversation.id === nextActiveConversationId,
@@ -157,9 +179,10 @@ export function ChatApp() {
     void saveConversation(nextConversation);
   }
 
-  async function createAndSelectConversation() {
+  async function createAndSelectConversation(mode?: "standard" | "council") {
+    const record = createConversationRecord(settings.defaultModelId);
     const nextConversation = await saveConversation(
-      createConversationRecord(settings.defaultModelId),
+      mode === "council" ? { ...record, mode: "council" } : record,
     );
 
     setConversations((currentConversations) =>
@@ -202,6 +225,11 @@ export function ChatApp() {
     setIsSidebarOpen(false);
   }
 
+  function handleNewCouncil() {
+    void createAndSelectConversation("council");
+    setIsSidebarOpen(false);
+  }
+
   async function handleRenameConversation(
     conversation: ConversationRecord,
     manualTitle: string | null,
@@ -220,6 +248,18 @@ export function ChatApp() {
     setRenameTarget(null);
   }
 
+  async function handlePinToggle(conversation: ConversationRecord) {
+    const updatedConversation = isPinnedConversation(conversation)
+      ? await unpinConversation(conversation.id)
+      : await pinConversation(conversation.id);
+
+    if (updatedConversation) {
+      setConversations((currentConversations) =>
+        upsertConversation(currentConversations, updatedConversation),
+      );
+    }
+  }
+
   async function handleArchiveToggle(conversation: ConversationRecord) {
     const updatedConversation = isArchivedConversation(conversation)
       ? await restoreConversation(conversation.id)
@@ -234,8 +274,11 @@ export function ChatApp() {
 
     if (isArchivedConversation(conversation)) {
       setActiveConversationId(updatedConversation.id);
+      showToast("Thread restored");
       return;
     }
+
+    showToast("Thread archived");
 
     if (activeConversationId !== conversation.id) {
       return;
@@ -262,6 +305,7 @@ export function ChatApp() {
     const nextConversations = removeConversation(conversations, conversation.id);
     setConversations(nextConversations);
     setDeleteTarget(null);
+    showToast("Thread deleted");
 
     if (activeConversationId !== conversation.id) {
       return;
@@ -304,6 +348,29 @@ export function ChatApp() {
       .replace(/^-|-$/g, "") || "conversation"}.md`;
     link.click();
     URL.revokeObjectURL(url);
+    showToast("Exported as markdown");
+  }
+
+  // Memory handlers
+  async function handleAddMemory(entry: MemoryEntry) {
+    if (isDuplicateMemory(memories, entry.content)) {
+      return;
+    }
+
+    await saveMemory(entry);
+    setMemories((prev) => [entry, ...prev]);
+    showToast("Memory saved");
+  }
+
+  async function handleDeleteMemory(id: string) {
+    await deleteMemory(id);
+    setMemories((prev) => prev.filter((m) => m.id !== id));
+  }
+
+  async function handleClearMemories() {
+    await clearMemories();
+    setMemories([]);
+    showToast("All memories cleared");
   }
 
   const activeConversation =
@@ -319,6 +386,43 @@ export function ChatApp() {
     (conversation) => !isArchivedConversation(conversation),
   );
   const archivedConversations = matchingConversations.filter(isArchivedConversation);
+
+  const handleKeyDown = useEffectEvent((event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      if (deleteTarget) {
+        setDeleteTarget(null);
+      } else if (renameTarget) {
+        setRenameTarget(null);
+      } else if (isSettingsOpen) {
+        setIsSettingsOpen(false);
+      } else if (isSidebarOpen) {
+        setIsSidebarOpen(false);
+      }
+      return;
+    }
+
+    if ((event.metaKey || event.ctrlKey) && event.key === "n") {
+      const target = event.target as HTMLElement;
+      const isInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
+
+      if (isInput) {
+        return;
+      }
+
+      event.preventDefault();
+      handleNewConversation();
+    }
+  });
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      handleKeyDown(event);
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   if (!isLoaded || !activeConversation) {
     return (
@@ -336,6 +440,8 @@ export function ChatApp() {
     );
   }
 
+  const isCouncilMode = activeConversation.mode === "council";
+
   return (
     <>
       <main className="app-shell isolate flex h-dvh overflow-hidden p-3 sm:p-4">
@@ -350,7 +456,9 @@ export function ChatApp() {
               }
               onDeleteConversation={(conversation) => setDeleteTarget(conversation)}
               onNewConversation={handleNewConversation}
+              onNewCouncil={handleNewCouncil}
               onOpenSettings={() => setIsSettingsOpen(true)}
+              onPinToggle={(conversation) => void handlePinToggle(conversation)}
               onRenameConversation={(conversation) => setRenameTarget(conversation)}
               onSearchChange={setSidebarSearchQuery}
               searchQuery={sidebarSearchQuery}
@@ -358,21 +466,38 @@ export function ChatApp() {
           </div>
 
           <section className="panel-surface relative flex h-full min-h-0 flex-1 overflow-hidden rounded-[30px]">
-            <ConversationSession
-              key={activeConversation.id}
-              conversation={activeConversation}
-              customModelId={settings.customModelId}
-              openRouterApiKey={settings.openRouterApiKey}
-              onConversationChange={replaceConversation}
-              onDeleteConversation={(conversation) => setDeleteTarget(conversation)}
-              onExportConversation={handleExportConversation}
-              onOpenSettings={() => setIsSettingsOpen(true)}
-              onRenameConversation={(conversation) => setRenameTarget(conversation)}
-              onToggleArchiveConversation={(conversation) =>
-                void handleArchiveToggle(conversation)
-              }
-              onToggleSidebar={() => setIsSidebarOpen(true)}
-            />
+            {isCouncilMode ? (
+              <CouncilSession
+                key={activeConversation.id}
+                conversation={activeConversation}
+                customModelId={settings.customModelId}
+                memories={memories}
+                openRouterApiKey={settings.openRouterApiKey}
+                onAutoMemory={(entry) => void handleAddMemory(entry)}
+                onConversationChange={replaceConversation}
+                onOpenSettings={() => setIsSettingsOpen(true)}
+                onToggleSidebar={() => setIsSidebarOpen(true)}
+              />
+            ) : (
+              <ConversationSession
+                key={activeConversation.id}
+                conversation={activeConversation}
+                customModelId={settings.customModelId}
+                memories={memories}
+                openRouterApiKey={settings.openRouterApiKey}
+                onAutoMemory={(entry) => void handleAddMemory(entry)}
+                onConversationChange={replaceConversation}
+                onDeleteConversation={(conversation) => setDeleteTarget(conversation)}
+                onExportConversation={handleExportConversation}
+                onOpenSettings={() => setIsSettingsOpen(true)}
+                onPinToggle={(conversation) => void handlePinToggle(conversation)}
+                onRenameConversation={(conversation) => setRenameTarget(conversation)}
+                onToggleArchiveConversation={(conversation) =>
+                  void handleArchiveToggle(conversation)
+                }
+                onToggleSidebar={() => setIsSidebarOpen(true)}
+              />
+            )}
           </section>
         </div>
       </main>
@@ -393,10 +518,12 @@ export function ChatApp() {
                 setIsSidebarOpen(false);
               }}
               onNewConversation={handleNewConversation}
+              onNewCouncil={handleNewCouncil}
               onOpenSettings={() => {
                 setIsSidebarOpen(false);
                 setIsSettingsOpen(true);
               }}
+              onPinToggle={(conversation) => void handlePinToggle(conversation)}
               onRequestClose={() => setIsSidebarOpen(false)}
               onRenameConversation={(conversation) => {
                 setRenameTarget(conversation);
@@ -422,8 +549,12 @@ export function ChatApp() {
       <SettingsPanel
         archivedConversations={archivedConversations}
         isOpen={isSettingsOpen}
+        memories={memories}
         modelId={activeConversation.modelId}
+        onAddMemory={(entry) => void handleAddMemory(entry)}
+        onClearMemories={() => void handleClearMemories()}
         onClose={() => setIsSettingsOpen(false)}
+        onDeleteMemory={(id) => void handleDeleteMemory(id)}
         onRestoreConversation={(conversation) =>
           void handleRestoreArchivedConversation(conversation)
         }

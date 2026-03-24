@@ -32,6 +32,18 @@ export function getMessageText(message?: UIMessage) {
     .trim();
 }
 
+export function isMessageStreaming(message?: UIMessage) {
+  if (!message) {
+    return false;
+  }
+
+  return message.parts.some(
+    (part) =>
+      (part.type === "text" || part.type === "reasoning") &&
+      part.state === "streaming",
+  );
+}
+
 export function deriveConversationTitle(messages: UIMessage[]) {
   const firstUserMessage = messages.find((message) => message.role === "user");
   const text = getMessageText(firstUserMessage);
@@ -137,6 +149,57 @@ export function exportConversationAsMarkdown(conversation: ConversationRecord) {
   ]
     .join("\n")
     .trim();
+}
+
+export type ConversationGroup = {
+  label: string;
+  conversations: ConversationRecord[];
+};
+
+export function groupConversationsByDate(
+  conversations: ConversationRecord[],
+): ConversationGroup[] {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfYesterday = new Date(startOfToday.getTime() - 86_400_000);
+  const startOf7DaysAgo = new Date(startOfToday.getTime() - 7 * 86_400_000);
+  const startOf30DaysAgo = new Date(startOfToday.getTime() - 30 * 86_400_000);
+
+  const buckets: Record<string, ConversationRecord[]> = {
+    Pinned: [],
+    Today: [],
+    Yesterday: [],
+    "Previous 7 days": [],
+    "Previous 30 days": [],
+    Older: [],
+  };
+
+  const bucketOrder = Object.keys(buckets);
+
+  for (const conversation of conversations) {
+    if (conversation.pinnedAt) {
+      buckets.Pinned.push(conversation);
+      continue;
+    }
+
+    const updatedAt = new Date(conversation.updatedAt);
+
+    if (updatedAt >= startOfToday) {
+      buckets.Today.push(conversation);
+    } else if (updatedAt >= startOfYesterday) {
+      buckets.Yesterday.push(conversation);
+    } else if (updatedAt >= startOf7DaysAgo) {
+      buckets["Previous 7 days"].push(conversation);
+    } else if (updatedAt >= startOf30DaysAgo) {
+      buckets["Previous 30 days"].push(conversation);
+    } else {
+      buckets.Older.push(conversation);
+    }
+  }
+
+  return bucketOrder
+    .filter((label) => buckets[label].length > 0)
+    .map((label) => ({ label, conversations: buckets[label] }));
 }
 
 export function formatConversationTimestamp(timestamp: string) {

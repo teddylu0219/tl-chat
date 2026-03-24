@@ -72,6 +72,48 @@ test("filters threads through search", async ({ page }) => {
   );
 });
 
+test("saves durable memories from user facts", async ({ page }) => {
+  await page.goto("/");
+
+  await configureLocalKey(page);
+  await sendPrompt(page, "i am a student from nycu");
+
+  await page.getByTestId("header-settings-button").click();
+  await expect(page.getByTestId("settings-panel")).toBeVisible();
+  await expect(
+    page.getByText("User is a student from NYCU", { exact: true }),
+  ).toBeVisible();
+});
+
+test("runs council mode with a host synthesis", async ({ page }) => {
+  await page.goto("/");
+
+  await configureLocalKey(page);
+  await page.getByRole("button", { name: "New council" }).click();
+
+  await expect(
+    page.getByText("Multi-model discussion with a host.", { exact: true }),
+  ).toBeVisible();
+
+  await page
+    .getByTestId("council-host-select")
+    .selectOption({ label: "Gemini 2.5 Flash" });
+  await page
+    .getByTestId("council-composer-input")
+    .fill("What do you think about relationships with AI?");
+  await page.getByTestId("council-send-button").click();
+
+  await expect(
+    page.getByText("Gemini 2.5 Flash · Host synthesis · Round 1", {
+      exact: true,
+    }),
+  ).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("returned no response")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: /Copy .* message/i }).first(),
+  ).toBeVisible();
+});
+
 test("archives and restores a thread", async ({ page }) => {
   await page.goto("/");
 
