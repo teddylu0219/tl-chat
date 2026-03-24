@@ -9,7 +9,7 @@ import { ZodError } from "zod";
 import { parseChatRequest } from "@/lib/chat-schema";
 import { createOpenRouterProvider, getErrorMessage, getErrorStatus } from "@/lib/openrouter";
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 function omitMessageId<T extends { id: string }>(message: T) {
   const { id, ...nextMessage } = message;
@@ -20,7 +20,9 @@ function omitMessageId<T extends { id: string }>(message: T) {
 }
 
 function buildMockResponse(modelId: string, text: string) {
-  const responseText = `Mock reply from ${modelId}: ${text || "Ready for the next prompt."}`;
+  const responseText = text
+    ? `Mock reply from ${modelId}:\n\n${text}`
+    : `Mock reply from ${modelId}: Ready for the next prompt.`;
   const chunkId = crypto.randomUUID();
 
   return createUIMessageStreamResponse({
@@ -28,7 +30,7 @@ function buildMockResponse(modelId: string, text: string) {
       execute: async ({ writer }) => {
         writer.write({ type: "text-start", id: chunkId });
 
-        for (const chunk of responseText.match(/.{1,18}/g) ?? []) {
+        for (const chunk of responseText.match(/[\s\S]{1,18}/g) ?? []) {
           writer.write({ type: "text-delta", id: chunkId, delta: chunk });
           await new Promise((resolve) => setTimeout(resolve, 8));
         }

@@ -1,24 +1,29 @@
 "use client";
 
-import { Eye, EyeOff, KeyRound, Save, X } from "lucide-react";
+import { Eye, EyeOff, KeyRound, RotateCcw, Save, X } from "lucide-react";
 import { useState } from "react";
 
+import { formatConversationTimestamp, getDisplayTitle } from "@/lib/conversations";
 import { THEME_OPTIONS } from "@/lib/app-config";
 import { getModelOptions } from "@/lib/models";
-import type { LocalSettings } from "@/lib/persistence";
+import type { ConversationRecord, LocalSettings } from "@/lib/persistence";
 
 type SettingsPanelProps = {
+  archivedConversations: ConversationRecord[];
   isOpen: boolean;
   modelId: string;
   onClose: () => void;
+  onRestoreConversation: (conversation: ConversationRecord) => void;
   onSave: (settings: LocalSettings) => void | Promise<void>;
   settings: LocalSettings;
 };
 
 export function SettingsPanel({
+  archivedConversations,
   isOpen,
   modelId,
   onClose,
+  onRestoreConversation,
   onSave,
   settings,
 }: SettingsPanelProps) {
@@ -43,7 +48,7 @@ export function SettingsPanel({
               Local settings
             </p>
             <h2 className="serif-heading mt-2 text-4xl leading-none text-[color:var(--foreground)]">
-              Keep it personal.
+              Keep it local.
             </h2>
           </div>
 
@@ -56,8 +61,11 @@ export function SettingsPanel({
           </button>
         </div>
 
-        <div className="flex-1 space-y-6 overflow-y-auto px-6 py-6">
-          <section className="rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface-strong)] p-5">
+        <div className="scroll-column flex-1 space-y-6 overflow-y-auto px-6 py-6">
+          <section
+            className="rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface-strong)] p-5"
+            data-testid="archived-threads-section"
+          >
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--surface-muted)] text-[color:var(--accent-strong)]">
                 <KeyRound className="h-5 w-5" />
@@ -132,7 +140,7 @@ export function SettingsPanel({
                 Appearance
               </span>
               <span className="mt-1 block text-sm text-[color:var(--muted-foreground)]">
-                Calm by default, but still yours.
+                Choose the tone that fits your desk.
               </span>
               <select
                 className="mt-4 w-full rounded-2xl border border-[color:var(--border)] bg-transparent px-4 py-3 text-sm text-[color:var(--foreground)] outline-none"
@@ -173,6 +181,57 @@ export function SettingsPanel({
               }
             />
           </label>
+
+          <section className="rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface-strong)] p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-[color:var(--foreground)]">
+                  Archived threads
+                </h3>
+                <p className="mt-1 text-sm text-[color:var(--muted-foreground)]">
+                  Hidden from the sidebar until restored.
+                </p>
+              </div>
+              <span className="rounded-full bg-[color:var(--surface-muted)] px-3 py-1 text-xs text-[color:var(--muted-foreground)]">
+                {archivedConversations.length}
+              </span>
+            </div>
+
+            {archivedConversations.length === 0 ? (
+              <div className="mt-4 rounded-[20px] border border-dashed border-[color:var(--border)] px-4 py-4 text-sm text-[color:var(--muted-foreground)]">
+                No archived threads.
+              </div>
+            ) : (
+              <div className="mt-4 space-y-2">
+                {archivedConversations.map((conversation) => (
+                  <div
+                    key={conversation.id}
+                    className="flex items-center justify-between gap-3 rounded-[20px] border border-[color:var(--border)] bg-[color:var(--surface-muted)] px-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-[color:var(--foreground)]">
+                        {getDisplayTitle(conversation)}
+                      </p>
+                      <p className="mt-1 text-xs text-[color:var(--muted-foreground)]">
+                        {formatConversationTimestamp(conversation.updatedAt)}
+                      </p>
+                    </div>
+                    <button
+                      className="rounded-full border border-[color:var(--border)] px-3 py-2 text-sm text-[color:var(--foreground)] transition hover:border-[color:var(--border-strong)] hover:text-[color:var(--accent-strong)]"
+                      data-testid={`restore-archived-${conversation.id}`}
+                      type="button"
+                      onClick={() => onRestoreConversation(conversation)}
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        <RotateCcw className="h-4 w-4" />
+                        Restore
+                      </span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         </div>
 
         <div className="flex items-center justify-between border-t border-[color:var(--border)] px-6 py-5">

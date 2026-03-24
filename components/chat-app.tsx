@@ -3,17 +3,27 @@
 import { LoaderCircle, Menu } from "lucide-react";
 import { useEffect, useEffectEvent, useState } from "react";
 
+import { DeleteConversationDialog, RenameConversationDialog } from "@/components/thread-dialogs";
 import { ConversationSession } from "@/components/conversation-session";
-import { SettingsPanel } from "@/components/settings-panel";
 import { ChatSidebar } from "@/components/chat-sidebar";
+import { SettingsPanel } from "@/components/settings-panel";
 import {
   createConversationRecord,
+  exportConversationAsMarkdown,
+  getDisplayTitle,
   hasConversationContent,
+  isArchivedConversation,
+  matchesConversationSearch,
+  sortConversations,
 } from "@/lib/conversations";
 import { DEFAULT_SETTINGS, type ConversationRecord, type LocalSettings } from "@/lib/persistence";
 import {
+  archiveConversation,
+  deleteConversationPermanent,
   getSettings,
   listConversations,
+  renameConversation,
+  restoreConversation,
   saveConversation,
   saveSettings,
 } from "@/lib/persistence";
@@ -30,9 +40,21 @@ function upsertConversation(
       )
     : [nextConversation, ...conversations];
 
-  return nextConversations.sort((left, right) =>
-    right.updatedAt.localeCompare(left.updatedAt),
-  );
+  return sortConversations(nextConversations);
+}
+
+function removeConversation(
+  conversations: ConversationRecord[],
+  conversationId: string,
+) {
+  return conversations.filter((conversation) => conversation.id !== conversationId);
+}
+
+function findFallbackConversation(
+  conversations: ConversationRecord[],
+) {
+  const nonEmptyConversations = conversations.filter(hasConversationContent);
+  return nonEmptyConversations.find((conversation) => !isArchivedConversation(conversation)) ?? null;
 }
 
 export function ChatApp() {
@@ -44,6 +66,9 @@ export function ChatApp() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<ConversationRecord | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ConversationRecord | null>(null);
+  const [sidebarSearchQuery, setSidebarSearchQuery] = useState("");
 
   const applyTheme = useEffectEvent((themePreference: LocalSettings["themePreference"]) => {
     const root = document.documentElement;
@@ -79,7 +104,15 @@ export function ChatApp() {
 
       setSettings(storedSettings);
       setConversations(nextConversations);
-      setActiveConversationId(nextActiveConversationId);
+      setActiveConversationId(
+        nextConversations.find(
+          (conversation) => conversation.id === nextActiveConversationId,
+        )?.archivedAt
+          ? findFallbackConversation(nextConversations)?.id ??
+              nextConversations.find((conversation) => !conversation.archivedAt)?.id ??
+              null
+          : nextActiveConversationId,
+      );
       setIsLoaded(true);
 
       if (storedConversations.length === 0) {
@@ -124,6 +157,19 @@ export function ChatApp() {
     void saveConversation(nextConversation);
   }
 
+  async function createAndSelectConversation() {
+    const nextConversation = await saveConversation(
+      createConversationRecord(settings.defaultModelId),
+    );
+
+    setConversations((currentConversations) =>
+      upsertConversation(currentConversations, nextConversation),
+    );
+    setActiveConversationId(nextConversation.id);
+
+    return nextConversation;
+  }
+
   async function handleSaveSettings(nextSettings: LocalSettings) {
     setSettings(nextSettings);
     await saveSettings(nextSettings);
@@ -152,11 +198,112 @@ export function ChatApp() {
       return;
     }
 
-    const nextConversation = createConversationRecord(settings.defaultModelId);
-
-    replaceConversation(nextConversation);
-    setActiveConversationId(nextConversation.id);
+    void createAndSelectConversation();
     setIsSidebarOpen(false);
+  }
+
+  async function handleRenameConversation(
+    conversation: ConversationRecord,
+    manualTitle: string | null,
+  ) {
+    const updatedConversation = await renameConversation(
+      conversation.id,
+      manualTitle,
+    );
+
+    if (updatedConversation) {
+      setConversations((currentConversations) =>
+        upsertConversation(currentConversations, updatedConversation),
+      );
+    }
+
+    setRenameTarget(null);
+  }
+
+  async function handleArchiveToggle(conversation: ConversationRecord) {
+    const updatedConversation = isArchivedConversation(conversation)
+      ? await restoreConversation(conversation.id)
+      : await archiveConversation(conversation.id);
+
+    if (!updatedConversation) {
+      return;
+    }
+
+    const nextConversations = upsertConversation(conversations, updatedConversation);
+    setConversations(nextConversations);
+
+    if (isArchivedConversation(conversation)) {
+      setActiveConversationId(updatedConversation.id);
+      return;
+    }
+
+    if (activeConversationId !== conversation.id) {
+      return;
+    }
+
+    const fallbackConversation = findFallbackConversation(
+      nextConversations.filter(
+        (item) =>
+          item.id !== conversation.id || !isArchivedConversation(updatedConversation),
+      ),
+    );
+
+    if (fallbackConversation) {
+      setActiveConversationId(fallbackConversation.id);
+      return;
+    }
+
+    await createAndSelectConversation();
+  }
+
+  async function handleDeleteConversation(conversation: ConversationRecord) {
+    await deleteConversationPermanent(conversation.id);
+
+    const nextConversations = removeConversation(conversations, conversation.id);
+    setConversations(nextConversations);
+    setDeleteTarget(null);
+
+    if (activeConversationId !== conversation.id) {
+      return;
+    }
+
+    const fallbackConversation = findFallbackConversation(nextConversations);
+
+    if (fallbackConversation) {
+      setActiveConversationId(fallbackConversation.id);
+      return;
+    }
+
+    await createAndSelectConversation();
+  }
+
+  async function handleRestoreArchivedConversation(conversation: ConversationRecord) {
+    const updatedConversation = await restoreConversation(conversation.id);
+
+    if (!updatedConversation) {
+      return;
+    }
+
+    setConversations((currentConversations) =>
+      upsertConversation(currentConversations, updatedConversation),
+    );
+    setActiveConversationId(updatedConversation.id);
+  }
+
+  function handleExportConversation(conversation: ConversationRecord) {
+    const blob = new Blob([exportConversationAsMarkdown(conversation)], {
+      type: "text/markdown;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = `${getDisplayTitle(conversation)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "conversation"}.md`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   const activeConversation =
@@ -164,13 +311,18 @@ export function ChatApp() {
     conversations[0] ??
     null;
 
-  const visibleConversations = conversations.filter((conversation) =>
-    hasConversationContent(conversation),
+  const visibleConversations = conversations.filter(hasConversationContent);
+  const matchingConversations = visibleConversations.filter((conversation) =>
+    matchesConversationSearch(conversation, sidebarSearchQuery),
   );
+  const activeConversations = matchingConversations.filter(
+    (conversation) => !isArchivedConversation(conversation),
+  );
+  const archivedConversations = matchingConversations.filter(isArchivedConversation);
 
   if (!isLoaded || !activeConversation) {
     return (
-      <main className="app-shell isolate flex min-h-screen items-center justify-center p-4">
+      <main className="app-shell isolate flex h-dvh items-center justify-center overflow-hidden p-4">
         <div className="panel-surface flex w-full max-w-xl items-center gap-4 rounded-[28px] px-6 py-5 text-[color:var(--foreground)]">
           <LoaderCircle className="h-5 w-5 animate-spin text-[color:var(--accent-strong)]" />
           <div>
@@ -186,28 +338,39 @@ export function ChatApp() {
 
   return (
     <>
-      <main className="app-shell isolate flex min-h-screen p-3 sm:p-5">
-        <div className="mx-auto flex w-full max-w-[1600px] gap-3 lg:gap-4">
+      <main className="app-shell isolate flex h-dvh overflow-hidden p-3 sm:p-4">
+        <div className="mx-auto flex h-full min-h-0 w-full max-w-[1720px] gap-3 lg:gap-5">
           <div className="hidden lg:block">
             <ChatSidebar
               activeConversationId={activeConversation.id}
-              conversations={visibleConversations}
+              conversations={activeConversations}
+              onArchiveToggle={(conversation) => void handleArchiveToggle(conversation)}
               onConversationSelect={(conversationId) =>
                 setActiveConversationId(conversationId)
               }
+              onDeleteConversation={(conversation) => setDeleteTarget(conversation)}
               onNewConversation={handleNewConversation}
               onOpenSettings={() => setIsSettingsOpen(true)}
+              onRenameConversation={(conversation) => setRenameTarget(conversation)}
+              onSearchChange={setSidebarSearchQuery}
+              searchQuery={sidebarSearchQuery}
             />
           </div>
 
-          <section className="panel-surface relative flex min-h-[calc(100vh-24px)] flex-1 overflow-hidden rounded-[32px] sm:min-h-[calc(100vh-40px)]">
+          <section className="panel-surface relative flex h-full min-h-0 flex-1 overflow-hidden rounded-[30px]">
             <ConversationSession
               key={activeConversation.id}
               conversation={activeConversation}
               customModelId={settings.customModelId}
               openRouterApiKey={settings.openRouterApiKey}
               onConversationChange={replaceConversation}
+              onDeleteConversation={(conversation) => setDeleteTarget(conversation)}
+              onExportConversation={handleExportConversation}
               onOpenSettings={() => setIsSettingsOpen(true)}
+              onRenameConversation={(conversation) => setRenameTarget(conversation)}
+              onToggleArchiveConversation={(conversation) =>
+                void handleArchiveToggle(conversation)
+              }
               onToggleSidebar={() => setIsSidebarOpen(true)}
             />
           </section>
@@ -219,9 +382,14 @@ export function ChatApp() {
           <div className="flex h-full w-[min(100%,340px)] flex-col">
             <ChatSidebar
               activeConversationId={activeConversation.id}
-              conversations={visibleConversations}
+              conversations={activeConversations}
+              onArchiveToggle={(conversation) => void handleArchiveToggle(conversation)}
               onConversationSelect={(conversationId) => {
                 setActiveConversationId(conversationId);
+                setIsSidebarOpen(false);
+              }}
+              onDeleteConversation={(conversation) => {
+                setDeleteTarget(conversation);
                 setIsSidebarOpen(false);
               }}
               onNewConversation={handleNewConversation}
@@ -230,6 +398,12 @@ export function ChatApp() {
                 setIsSettingsOpen(true);
               }}
               onRequestClose={() => setIsSidebarOpen(false)}
+              onRenameConversation={(conversation) => {
+                setRenameTarget(conversation);
+                setIsSidebarOpen(false);
+              }}
+              onSearchChange={setSidebarSearchQuery}
+              searchQuery={sidebarSearchQuery}
             />
           </div>
         </div>
@@ -246,11 +420,27 @@ export function ChatApp() {
       </button>
 
       <SettingsPanel
+        archivedConversations={archivedConversations}
         isOpen={isSettingsOpen}
         modelId={activeConversation.modelId}
         onClose={() => setIsSettingsOpen(false)}
+        onRestoreConversation={(conversation) =>
+          void handleRestoreArchivedConversation(conversation)
+        }
         onSave={handleSaveSettings}
         settings={settings}
+      />
+      <RenameConversationDialog
+        conversation={renameTarget}
+        onClose={() => setRenameTarget(null)}
+        onSave={(conversation, manualTitle) =>
+          void handleRenameConversation(conversation, manualTitle)
+        }
+      />
+      <DeleteConversationDialog
+        conversation={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onDelete={(conversation) => void handleDeleteConversation(conversation)}
       />
     </>
   );

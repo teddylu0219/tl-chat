@@ -1,4 +1,4 @@
-export const APP_NAME = "Own AI Chat";
+export const APP_NAME = "tl.chat";
 
 export const THEME_OPTIONS = [
   { value: "warm-light", label: "Warm Light" },
