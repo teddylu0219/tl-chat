@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 export type MemoryEntry = {
   id: string;
   content: string;
@@ -61,6 +63,10 @@ const MEMORY_INSTRUCTIONS = [
   "- Maximum 1-2 memories per response. Skip if nothing is worth remembering.",
 ].join("\n");
 
+export const memoryExtractionSchema = z.object({
+  memories: z.array(z.string().trim().min(1)).max(2).default([]),
+});
+
 export function formatMemoriesAsSystemPrompt(memories: MemoryEntry[]): string {
   const memoryContext =
     memories.length > 0
@@ -72,6 +78,44 @@ export function formatMemoriesAsSystemPrompt(memories: MemoryEntry[]): string {
       : "";
 
   return memoryContext + MEMORY_INSTRUCTIONS;
+}
+
+export function buildMemoryExtractionSystemPrompt() {
+  return [
+    "You extract durable user memories from a chat.",
+    "The user's messages may be in any language.",
+    "Return only facts, preferences, identity details, long-term context, or recurring instructions that should persist across future chats.",
+    "Ignore one-off tasks, temporary requests, short-lived context, and facts about other people unless the user clearly says the fact is about themselves.",
+    "If the latest message is a remember/save request like 'remember this', infer the memory from the recent user messages.",
+    "Write each memory as a concise standalone English sentence that starts with 'User'.",
+    "Avoid duplicates with existing memories.",
+    "If nothing is worth remembering, return an empty array.",
+  ].join("\n");
+}
+
+export function buildMemoryExtractionUserPrompt({
+  existingMemories,
+  input,
+  recentUserMessages,
+}: {
+  existingMemories: string[];
+  input: string;
+  recentUserMessages: string[];
+}) {
+  return [
+    "Latest user message:",
+    input || "(empty)",
+    "",
+    "Recent user messages:",
+    recentUserMessages.length > 0
+      ? recentUserMessages.map((message) => `- ${message}`).join("\n")
+      : "- None",
+    "",
+    "Existing memories:",
+    existingMemories.length > 0
+      ? existingMemories.map((memory) => `- ${memory}`).join("\n")
+      : "- None",
+  ].join("\n");
 }
 
 export function isExplicitRememberRequest(text: string) {

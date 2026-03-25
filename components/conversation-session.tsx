@@ -44,7 +44,6 @@ import {
   extractMemoriesFromResponse,
   formatMemoriesAsSystemPrompt,
   isDuplicateMemory,
-  resolveMemoryCandidates,
   type MemoryEntry,
 } from "@/lib/memory";
 import { getModelOption, getModelOptions } from "@/lib/models";
@@ -95,6 +94,41 @@ function createNewMemoryEntries(
   }
 
   return entries;
+}
+
+async function requestMemoryCandidates({
+  apiKey,
+  existingMemories,
+  input,
+  modelId,
+  recentUserMessages,
+}: {
+  apiKey: string;
+  existingMemories: string[];
+  input: string;
+  modelId: string;
+  recentUserMessages: string[];
+}) {
+  const response = await fetch("/api/memory", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      apiKey,
+      existingMemories,
+      input,
+      modelId,
+      recentUserMessages,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+
+  const data = (await response.json()) as { memories?: string[] };
+  return data.memories ?? [];
 }
 
 function CopyTextButton({
@@ -628,19 +662,20 @@ export function ConversationSession({
     clearError();
     setGateError(null);
 
-    if (onAutoMemory) {
-      const previousUserInputs = messages
-        .filter((message) => message.role === "user")
-        .map((message) => getMessageText(message))
-        .filter(Boolean);
+    const previousUserInputs = messages
+      .filter((message) => message.role === "user")
+      .map((message) => getMessageText(message))
+      .filter(Boolean);
 
-      for (const entry of createNewMemoryEntries(
-        memories,
-        resolveMemoryCandidates(nextText, previousUserInputs),
-      )) {
-        onAutoMemory(entry);
-      }
-    }
+    const memoryCandidatesPromise = onAutoMemory
+      ? requestMemoryCandidates({
+          apiKey: openRouterApiKey.trim(),
+          existingMemories: memories.map((memory) => memory.content),
+          input: nextText,
+          modelId,
+          recentUserMessages: previousUserInputs,
+        }).catch(() => [])
+      : Promise.resolve<string[]>([]);
 
     setDraft("");
 
@@ -655,6 +690,15 @@ export function ConversationSession({
           },
         },
       );
+
+      if (onAutoMemory) {
+        for (const entry of createNewMemoryEntries(
+          memories,
+          await memoryCandidatesPromise,
+        )) {
+          onAutoMemory(entry);
+        }
+      }
     } catch {
       setDraft(nextText);
     }
