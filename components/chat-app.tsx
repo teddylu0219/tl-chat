@@ -211,12 +211,20 @@ function ChatAppInner() {
     setIsSettingsOpen(false);
   }
 
+  function getConversationMode(conversation: ConversationRecord | undefined | null) {
+    return conversation?.mode === "council" ? "council" : "standard";
+  }
+
   function handleNewConversation() {
     const activeConversation = conversations.find(
       (conversation) => conversation.id === activeConversationId,
     );
 
-    if (activeConversation && !hasConversationContent(activeConversation)) {
+    if (
+      activeConversation &&
+      !hasConversationContent(activeConversation) &&
+      getConversationMode(activeConversation) === "standard"
+    ) {
       setIsSidebarOpen(false);
       return;
     }
@@ -226,6 +234,19 @@ function ChatAppInner() {
   }
 
   function handleNewCouncil() {
+    const activeConversation = conversations.find(
+      (conversation) => conversation.id === activeConversationId,
+    );
+
+    if (
+      activeConversation &&
+      !hasConversationContent(activeConversation) &&
+      getConversationMode(activeConversation) === "council"
+    ) {
+      setIsSidebarOpen(false);
+      return;
+    }
+
     void createAndSelectConversation("council");
     setIsSidebarOpen(false);
   }

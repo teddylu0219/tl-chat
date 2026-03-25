@@ -114,6 +114,32 @@ test("runs council mode with a host synthesis", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("switches back to standard chat from an empty council thread", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  await configureLocalKey(page);
+  await page.getByRole("button", { name: "New council" }).click();
+
+  await expect(
+    page.getByText("Multi-model discussion with a host.", { exact: true }),
+  ).toBeVisible();
+
+  await page.getByTestId("new-chat-button").click();
+
+  await expect(page.getByText("Start with a real question.")).toBeVisible();
+  await expect(
+    page.getByText("Multi-model discussion with a host.", { exact: true }),
+  ).toHaveCount(0);
+
+  await page.getByRole("button", { name: "New council" }).click();
+
+  await expect(
+    page.getByText("Multi-model discussion with a host.", { exact: true }),
+  ).toBeVisible();
+});
+
 test("archives and restores a thread", async ({ page }) => {
   await page.goto("/");
 
