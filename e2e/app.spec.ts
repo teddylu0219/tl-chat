@@ -85,6 +85,23 @@ test("saves durable memories from user facts", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("saves chinese memories and remembers them on request", async ({ page }) => {
+  await page.goto("/");
+
+  await configureLocalKey(page);
+  await sendPrompt(page, "我是交大的學生");
+  await sendPrompt(page, "記住他");
+
+  await page.getByTestId("header-settings-button").click();
+  await expect(page.getByTestId("settings-panel")).toBeVisible();
+  await expect(
+    page.getByText(
+      "User is a student at National Yang Ming Chiao Tung University (NYCU)",
+      { exact: true },
+    ),
+  ).toBeVisible();
+});
+
 test("runs council mode with a host synthesis", async ({ page }) => {
   await page.goto("/");
 

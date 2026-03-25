@@ -16,6 +16,15 @@ export function createMemoryEntry(content: string): MemoryEntry {
   };
 }
 
+const INSTITUTION_ALIASES: Record<string, string> = {
+  "nycu": "National Yang Ming Chiao Tung University (NYCU)",
+  "national yang ming chiao tung university":
+    "National Yang Ming Chiao Tung University (NYCU)",
+  "國立陽明交通大學": "National Yang Ming Chiao Tung University (NYCU)",
+  "陽明交大": "National Yang Ming Chiao Tung University (NYCU)",
+  "交大": "National Yang Ming Chiao Tung University (NYCU)",
+};
+
 function normalizeMemoryValue(value: string) {
   const cleaned = value
     .trim()
@@ -28,6 +37,12 @@ function normalizeMemoryValue(value: string) {
   }
 
   return cleaned;
+}
+
+function normalizeInstitutionValue(value: string) {
+  const normalized = normalizeMemoryValue(value);
+
+  return INSTITUTION_ALIASES[normalized.toLowerCase()] ?? normalized;
 }
 
 const MEMORY_INSTRUCTIONS = [
@@ -59,6 +74,23 @@ export function formatMemoriesAsSystemPrompt(memories: MemoryEntry[]): string {
   return memoryContext + MEMORY_INSTRUCTIONS;
 }
 
+export function isExplicitRememberRequest(text: string) {
+  const input = text.trim();
+
+  if (!input) {
+    return false;
+  }
+
+  return (
+    /\b(?:remember (?:this|that|it)|please remember|keep (?:this|that) in mind|save this)\b/i.test(
+      input,
+    ) ||
+    /(?:記住(?:它|他|這個|這件事)?|請記住|幫我記住|把.+記住|記下來|記得這件事)/.test(
+      input,
+    )
+  );
+}
+
 export function extractMemoriesFromUserInput(text: string): string[] {
   const input = text.trim();
 
@@ -67,12 +99,16 @@ export function extractMemoriesFromUserInput(text: string): string[] {
   }
 
   const memories = new Set<string>();
-  const addMemory = (value: string | undefined, formatter: (value: string) => string) => {
+  const addMemory = (
+    value: string | undefined,
+    formatter: (value: string) => string,
+    normalizer = normalizeMemoryValue,
+  ) => {
     if (!value) {
       return;
     }
 
-    const normalized = normalizeMemoryValue(value);
+    const normalized = normalizer(value);
 
     if (!normalized) {
       return;
@@ -87,8 +123,26 @@ export function extractMemoriesFromUserInput(text: string): string[] {
   );
 
   addMemory(
+    input.match(/我(?:是|係)(.+?)的學生(?:[。！？!?]|$)/)?.[1],
+    (value) => `User is a student at ${value}`,
+    normalizeInstitutionValue,
+  );
+
+  addMemory(
+    input.match(/我(?:在|目前在|現在在|正?在)?(.+?)(?:讀書|念書|就讀)(?:[。！？!?]|$)/)?.[1],
+    (value) => `User studies at ${value}`,
+    normalizeInstitutionValue,
+  );
+
+  addMemory(
     input.match(/\b(?:my university is|i study at|i'm studying at)\s+(.+?)(?:[.!?]|$)/i)?.[1],
     (value) => `User's university is ${value}`,
+  );
+
+  addMemory(
+    input.match(/我(?:的)?(?:大學|學校)(?:是|叫)\s*(.+?)(?:[。！？!?]|$)/)?.[1],
+    (value) => `User's university is ${value}`,
+    normalizeInstitutionValue,
   );
 
   addMemory(
@@ -97,11 +151,46 @@ export function extractMemoriesFromUserInput(text: string): string[] {
   );
 
   addMemory(
+    input.match(/我(?:叫|的名字是)\s*(.+?)(?:[。！？!?]|$)/)?.[1],
+    (value) => `User's name is ${value}`,
+  );
+
+  addMemory(
     input.match(/\bi prefer\s+(.+?)(?:[.!?]|$)/i)?.[1],
     (value) => `User prefers ${value}`,
   );
 
+  addMemory(
+    input.match(/我(?:比較)?喜歡\s*(.+?)(?:[。！？!?]|$)/)?.[1],
+    (value) => `User prefers ${value}`,
+  );
+
   return Array.from(memories);
+}
+
+export function resolveMemoryCandidates(
+  input: string,
+  previousUserInputs: string[] = [],
+): string[] {
+  const directMemories = extractMemoriesFromUserInput(input);
+
+  if (directMemories.length > 0) {
+    return directMemories;
+  }
+
+  if (!isExplicitRememberRequest(input)) {
+    return [];
+  }
+
+  for (const previousInput of [...previousUserInputs].reverse()) {
+    const extracted = extractMemoriesFromUserInput(previousInput);
+
+    if (extracted.length > 0) {
+      return extracted;
+    }
+  }
+
+  return [];
 }
 
 const MEMORY_TAG_RE = /<memory>([\s\S]*?)<\/memory>/g;

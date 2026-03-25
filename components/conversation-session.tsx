@@ -42,9 +42,9 @@ import {
 import {
   createMemoryEntry,
   extractMemoriesFromResponse,
-  extractMemoriesFromUserInput,
   formatMemoriesAsSystemPrompt,
   isDuplicateMemory,
+  resolveMemoryCandidates,
   type MemoryEntry,
 } from "@/lib/memory";
 import { getModelOption, getModelOptions } from "@/lib/models";
@@ -629,9 +629,14 @@ export function ConversationSession({
     setGateError(null);
 
     if (onAutoMemory) {
+      const previousUserInputs = messages
+        .filter((message) => message.role === "user")
+        .map((message) => getMessageText(message))
+        .filter(Boolean);
+
       for (const entry of createNewMemoryEntries(
         memories,
-        extractMemoriesFromUserInput(nextText),
+        resolveMemoryCandidates(nextText, previousUserInputs),
       )) {
         onAutoMemory(entry);
       }

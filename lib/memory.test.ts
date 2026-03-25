@@ -1,6 +1,7 @@
 import {
   extractMemoriesFromResponse,
   extractMemoriesFromUserInput,
+  resolveMemoryCandidates,
 } from "./memory";
 
 describe("memory helpers", () => {
@@ -13,6 +14,18 @@ describe("memory helpers", () => {
   it("extracts explicit preferences from user input", () => {
     expect(extractMemoriesFromUserInput("I prefer TypeScript over JavaScript.")).toEqual([
       "User prefers TypeScript over JavaScript",
+    ]);
+  });
+
+  it("extracts durable facts from chinese user input", () => {
+    expect(extractMemoriesFromUserInput("我是交大的學生")).toEqual([
+      "User is a student at National Yang Ming Chiao Tung University (NYCU)",
+    ]);
+  });
+
+  it("resolves memories from prior user facts when asked to remember in chinese", () => {
+    expect(resolveMemoryCandidates("記住他", ["我是交大的學生"])).toEqual([
+      "User is a student at National Yang Ming Chiao Tung University (NYCU)",
     ]);
   });
 
