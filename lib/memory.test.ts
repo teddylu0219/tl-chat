@@ -1,6 +1,8 @@
 import {
   extractMemoriesFromResponse,
   extractMemoriesFromUserInput,
+  normalizeMemoryOperations,
+  parseMemoryManagerResponse,
   resolveMemoryCandidates,
 } from "./memory";
 
@@ -26,6 +28,38 @@ describe("memory helpers", () => {
   it("resolves memories from prior user facts when asked to remember in chinese", () => {
     expect(resolveMemoryCandidates("記住他", ["我是交大的學生"])).toEqual([
       "User is a student at National Yang Ming Chiao Tung University (NYCU)",
+    ]);
+  });
+
+  it("parses memory manager json wrapped in markdown fences", () => {
+    expect(
+      parseMemoryManagerResponse(
+        '```json\n{"operations":[{"type":"add","content":"User prefers concise answers."}]}\n```',
+      ),
+    ).toEqual({
+      operations: [
+        {
+          content: "User prefers concise answers.",
+          type: "add",
+        },
+      ],
+    });
+  });
+
+  it("normalizes memory manager operations against existing memories", () => {
+    expect(
+      normalizeMemoryOperations(
+        [
+          { type: "add", content: "User prefers concise answers." },
+          { type: "add", content: "User prefers concise answers." },
+          { type: "update", id: "m1", content: "User studies at NYCU." },
+          { type: "delete", id: "missing" },
+        ],
+        [{ id: "m1", content: "User studies in Taiwan." }],
+      ),
+    ).toEqual([
+      { type: "add", content: "User prefers concise answers" },
+      { type: "update", id: "m1", content: "User studies at NYCU" },
     ]);
   });
 

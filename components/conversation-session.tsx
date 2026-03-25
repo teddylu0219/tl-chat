@@ -40,10 +40,9 @@ import {
   getMessageText,
 } from "@/lib/conversations";
 import {
-  createMemoryEntry,
   extractMemoriesFromResponse,
   formatMemoriesAsSystemPrompt,
-  isDuplicateMemory,
+  type MemoryOperation,
   type MemoryEntry,
 } from "@/lib/memory";
 import { getModelOption, getModelOptions } from "@/lib/models";
@@ -54,7 +53,7 @@ type ConversationSessionProps = {
   conversation: ConversationRecord;
   customModelId: string;
   memories: MemoryEntry[];
-  onAutoMemory?: (entry: MemoryEntry) => void;
+  onApplyMemoryOperations?: (operations: MemoryOperation[]) => void | Promise<void>;
   onConversationChange: (conversation: ConversationRecord) => void;
   onDeleteConversation: (conversation: ConversationRecord) => void;
   onExportConversation: (conversation: ConversationRecord) => void;
@@ -75,39 +74,16 @@ function extractCodeLanguage(className?: string) {
   return match?.[1] ?? null;
 }
 
-function createNewMemoryEntries(
-  existing: MemoryEntry[],
-  contents: string[],
-): MemoryEntry[] {
-  const seen = new Set(existing.map((entry) => entry.content.toLowerCase().trim()));
-  const entries: MemoryEntry[] = [];
-
-  for (const content of contents) {
-    const normalized = content.toLowerCase().trim();
-
-    if (seen.has(normalized) || isDuplicateMemory(existing, content)) {
-      continue;
-    }
-
-    seen.add(normalized);
-    entries.push(createMemoryEntry(content));
-  }
-
-  return entries;
-}
-
-async function requestMemoryCandidates({
+async function requestMemoryOperations({
   apiKey,
+  conversation,
   existingMemories,
-  input,
   modelId,
-  recentUserMessages,
 }: {
   apiKey: string;
-  existingMemories: string[];
-  input: string;
+  conversation: Array<{ content: string; role: "assistant" | "user" }>;
+  existingMemories: Array<{ content: string; id: string }>;
   modelId: string;
-  recentUserMessages: string[];
 }) {
   const response = await fetch("/api/memory", {
     method: "POST",
@@ -116,10 +92,9 @@ async function requestMemoryCandidates({
     },
     body: JSON.stringify({
       apiKey,
+      conversation,
       existingMemories,
-      input,
       modelId,
-      recentUserMessages,
     }),
   });
 
@@ -127,8 +102,8 @@ async function requestMemoryCandidates({
     throw new Error(await response.text());
   }
 
-  const data = (await response.json()) as { memories?: string[] };
-  return data.memories ?? [];
+  const data = (await response.json()) as { operations?: MemoryOperation[] };
+  return data.operations ?? [];
 }
 
 function CopyTextButton({
@@ -473,7 +448,7 @@ export function ConversationSession({
   conversation,
   customModelId,
   memories,
-  onAutoMemory,
+  onApplyMemoryOperations,
   onConversationChange,
   onDeleteConversation,
   onExportConversation,
@@ -612,7 +587,7 @@ export function ConversationSession({
 
   // Auto-extract memories from completed assistant responses
   useEffect(() => {
-    if (status !== "ready" || !onAutoMemory) {
+    if (status !== "ready" || !onApplyMemoryOperations) {
       return;
     }
 
@@ -628,13 +603,43 @@ export function ConversationSession({
 
     processedMemoryMessageIdRef.current = lastMessage.id;
 
-    const text = getMessageText(lastMessage);
-    const { memories: newMemories } = extractMemoriesFromResponse(text);
+    const recentConversation = messages
+      .slice(-6)
+      .map((message) => ({
+        content: getMessageText(message),
+        role: message.role,
+      }))
+      .filter(
+        (
+          message,
+        ): message is { content: string; role: "assistant" | "user" } =>
+          (message.role === "assistant" || message.role === "user") &&
+          Boolean(message.content.trim()),
+      );
+    const assistantMemories = extractMemoriesFromResponse(
+      getMessageText(lastMessage),
+    ).memories;
 
-    for (const entry of createNewMemoryEntries(memories, newMemories)) {
-      onAutoMemory(entry);
-    }
-  }, [memories, messages, onAutoMemory, status]);
+    void requestMemoryOperations({
+      apiKey: openRouterApiKey.trim(),
+      conversation: recentConversation,
+      existingMemories: memories.map((memory) => ({
+        content: memory.content,
+        id: memory.id,
+      })),
+      modelId,
+    })
+      .then(async (operations) => {
+        const assistantOperations = assistantMemories.map((content) => ({
+          content,
+          type: "add" as const,
+        }));
+        await onApplyMemoryOperations([...operations, ...assistantOperations]);
+      })
+      .catch((error) => {
+        console.warn("Memory sync failed", error);
+      });
+  }, [memories, messages, modelId, onApplyMemoryOperations, openRouterApiKey, status]);
 
   const modelOptions = getModelOptions(customModelId);
   const currentModel =
@@ -662,21 +667,6 @@ export function ConversationSession({
     clearError();
     setGateError(null);
 
-    const previousUserInputs = messages
-      .filter((message) => message.role === "user")
-      .map((message) => getMessageText(message))
-      .filter(Boolean);
-
-    const memoryCandidatesPromise = onAutoMemory
-      ? requestMemoryCandidates({
-          apiKey: openRouterApiKey.trim(),
-          existingMemories: memories.map((memory) => memory.content),
-          input: nextText,
-          modelId,
-          recentUserMessages: previousUserInputs,
-        }).catch(() => [])
-      : Promise.resolve<string[]>([]);
-
     setDraft("");
 
     try {
@@ -690,15 +680,6 @@ export function ConversationSession({
           },
         },
       );
-
-      if (onAutoMemory) {
-        for (const entry of createNewMemoryEntries(
-          memories,
-          await memoryCandidatesPromise,
-        )) {
-          onAutoMemory(entry);
-        }
-      }
     } catch {
       setDraft(nextText);
     }

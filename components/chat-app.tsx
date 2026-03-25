@@ -19,7 +19,12 @@ import {
   matchesConversationSearch,
   sortConversations,
 } from "@/lib/conversations";
-import { isDuplicateMemory, type MemoryEntry } from "@/lib/memory";
+import {
+  createMemoryEntry,
+  isDuplicateMemory,
+  type MemoryEntry,
+  type MemoryOperation,
+} from "@/lib/memory";
 import { DEFAULT_SETTINGS, type ConversationRecord, type LocalSettings } from "@/lib/persistence";
 import {
   archiveConversation,
@@ -394,6 +399,84 @@ function ChatAppInner() {
     showToast("All memories cleared");
   }
 
+  async function handleApplyMemoryOperations(operations: MemoryOperation[]) {
+    if (operations.length === 0) {
+      return;
+    }
+
+    let nextMemories = [...memories];
+    let didChange = false;
+
+    for (const operation of operations) {
+      if (operation.type === "add") {
+        if (isDuplicateMemory(nextMemories, operation.content)) {
+          continue;
+        }
+
+        const entry: MemoryEntry = {
+          ...createMemoryEntry(operation.content),
+        };
+
+        await saveMemory(entry);
+        nextMemories = [entry, ...nextMemories];
+        didChange = true;
+        continue;
+      }
+
+      const currentMemory = nextMemories.find((memory) => memory.id === operation.id);
+
+      if (!currentMemory) {
+        continue;
+      }
+
+      if (operation.type === "delete") {
+        await deleteMemory(operation.id);
+        nextMemories = nextMemories.filter((memory) => memory.id !== operation.id);
+        didChange = true;
+        continue;
+      }
+
+      const nextContent = operation.content.trim();
+
+      if (!nextContent) {
+        continue;
+      }
+
+      const duplicateTarget = nextMemories.find(
+        (memory) =>
+          memory.id !== operation.id &&
+          memory.content.toLowerCase().trim() === nextContent.toLowerCase(),
+      );
+
+      if (duplicateTarget) {
+        await deleteMemory(operation.id);
+        nextMemories = nextMemories.filter((memory) => memory.id !== operation.id);
+        didChange = true;
+        continue;
+      }
+
+      if (currentMemory.content === nextContent) {
+        continue;
+      }
+
+      const updatedMemory: MemoryEntry = {
+        ...currentMemory,
+        content: nextContent,
+        updatedAt: new Date().toISOString(),
+      };
+
+      await saveMemory(updatedMemory);
+      nextMemories = nextMemories.map((memory) =>
+        memory.id === operation.id ? updatedMemory : memory,
+      );
+      didChange = true;
+    }
+
+    if (didChange) {
+      setMemories(nextMemories);
+    }
+  }
+
   const activeConversation =
     conversations.find((conversation) => conversation.id === activeConversationId) ??
     conversations[0] ??
@@ -506,7 +589,9 @@ function ChatAppInner() {
                 customModelId={settings.customModelId}
                 memories={memories}
                 openRouterApiKey={settings.openRouterApiKey}
-                onAutoMemory={(entry) => void handleAddMemory(entry)}
+                onApplyMemoryOperations={(operations) =>
+                  void handleApplyMemoryOperations(operations)
+                }
                 onConversationChange={replaceConversation}
                 onDeleteConversation={(conversation) => setDeleteTarget(conversation)}
                 onExportConversation={handleExportConversation}

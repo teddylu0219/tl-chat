@@ -47,75 +47,179 @@ function normalizeInstitutionValue(value: string) {
   return INSTITUTION_ALIASES[normalized.toLowerCase()] ?? normalized;
 }
 
-const MEMORY_INSTRUCTIONS = [
-  "\n\n---\nMEMORY INSTRUCTIONS (invisible to user):",
-  "When the user shares personal preferences, facts about themselves, work context, or recurring instructions,",
-  "silently output a <memory> tag at the END of your response (after all visible content).",
-  "Format: <memory>concise fact or preference</memory>",
-  "Examples:",
-  '- User says "I\'m a frontend developer" → <memory>User is a frontend developer</memory>',
-  '- User says "Always use TypeScript" → <memory>User prefers TypeScript over JavaScript</memory>',
-  '- User says "My name is Alex" → <memory>User\'s name is Alex</memory>',
-  "Rules:",
-  "- Only emit <memory> for durable facts/preferences, NOT for ephemeral task details.",
-  "- Do NOT mention the memory system to the user.",
-  "- Do NOT emit <memory> if the fact is already in the existing memories above.",
-  "- Maximum 1-2 memories per response. Skip if nothing is worth remembering.",
-].join("\n");
-
-export const memoryExtractionSchema = z.object({
-  memories: z.array(z.string().trim().min(1)).max(2).default([]),
+const memoryAddOperationSchema = z.object({
+  content: z.string().trim().min(1),
+  type: z.literal("add"),
 });
 
+const memoryDeleteOperationSchema = z.object({
+  id: z.string().trim().min(1),
+  type: z.literal("delete"),
+});
+
+const memoryUpdateOperationSchema = z.object({
+  content: z.string().trim().min(1),
+  id: z.string().trim().min(1),
+  type: z.literal("update"),
+});
+
+export const memoryOperationSchema = z.discriminatedUnion("type", [
+  memoryAddOperationSchema,
+  memoryDeleteOperationSchema,
+  memoryUpdateOperationSchema,
+]);
+
+export const memorySyncSchema = z.object({
+  operations: z.array(memoryOperationSchema).max(4).default([]),
+});
+
+export type MemoryOperation = z.infer<typeof memoryOperationSchema>;
+export type MemoryReference = Pick<MemoryEntry, "content" | "id">;
+
 export function formatMemoriesAsSystemPrompt(memories: MemoryEntry[]): string {
-  const memoryContext =
-    memories.length > 0
-      ? [
-          "The user has shared the following preferences and facts about themselves.",
-          "Use this context to personalize your responses when relevant:\n",
-          memories.map((m) => `- ${m.content}`).join("\n"),
-        ].join("\n")
-      : "";
+  if (memories.length === 0) {
+    return "";
+  }
 
-  return memoryContext + MEMORY_INSTRUCTIONS;
-}
-
-export function buildMemoryExtractionSystemPrompt() {
   return [
-    "You extract durable user memories from a chat.",
-    "The user's messages may be in any language.",
-    "Return only facts, preferences, identity details, long-term context, or recurring instructions that should persist across future chats.",
-    "Ignore one-off tasks, temporary requests, short-lived context, and facts about other people unless the user clearly says the fact is about themselves.",
-    "If the latest message is a remember/save request like 'remember this', infer the memory from the recent user messages.",
-    "Write each memory as a concise standalone English sentence that starts with 'User'.",
-    "Avoid duplicates with existing memories.",
-    "If nothing is worth remembering, return an empty array.",
+    "The user has shared the following long-term preferences and facts.",
+    "Use them only when relevant to personalize responses:\n",
+    memories.map((memory) => `- ${memory.content}`).join("\n"),
   ].join("\n");
 }
 
-export function buildMemoryExtractionUserPrompt({
+export function buildMemoryManagerSystemPrompt() {
+  return [
+    "You are a long-term memory manager for an AI assistant.",
+    "The conversation can be in any language, but stored memories must be concise English sentences.",
+    "Memories should only capture durable facts, preferences, identity details, recurring instructions, or long-term work context about the user.",
+    "Do not store one-off tasks, temporary plans, short-lived context, or generic facts unrelated to the user.",
+    "If the latest message says things like 'remember this' or '記住他', infer the actual memory from the recent conversation instead of storing the command itself.",
+    "Compare against existing memories and return operations that keep the memory store clean.",
+    "Use 'add' for new durable memories.",
+    "Use 'update' when an existing memory should be rewritten or consolidated.",
+    "Use 'delete' when an existing memory is contradicted, stale, or redundant.",
+    "Prefer update/delete over creating duplicates.",
+    "Return strict JSON only with this shape: {\"operations\":[...]}",
+    "Each add needs {\"type\":\"add\",\"content\":\"User ...\"}.",
+    "Each update needs {\"type\":\"update\",\"id\":\"memory-id\",\"content\":\"User ...\"}.",
+    "Each delete needs {\"type\":\"delete\",\"id\":\"memory-id\"}.",
+    "If no changes are needed, return {\"operations\":[]}.",
+    "Never wrap the JSON in markdown unless you absolutely must.",
+  ].join("\n");
+}
+
+export function buildMemoryManagerUserPrompt({
+  conversation,
   existingMemories,
-  input,
-  recentUserMessages,
 }: {
-  existingMemories: string[];
-  input: string;
-  recentUserMessages: string[];
+  conversation: Array<{ content: string; role: "assistant" | "user" }>;
+  existingMemories: MemoryReference[];
 }) {
   return [
-    "Latest user message:",
-    input || "(empty)",
+    "Recent conversation:",
+    conversation.length > 0
+      ? conversation
+          .map((message) => `${message.role.toUpperCase()}: ${message.content || "(empty)"}`)
+          .join("\n")
+      : "USER: (empty)",
     "",
     "Recent user messages:",
-    recentUserMessages.length > 0
-      ? recentUserMessages.map((message) => `- ${message}`).join("\n")
+    conversation.filter((message) => message.role === "user").length > 0
+      ? conversation
+          .filter((message) => message.role === "user")
+          .map((message) => `- ${message.content || "(empty)"}`)
+          .join("\n")
       : "- None",
     "",
     "Existing memories:",
     existingMemories.length > 0
-      ? existingMemories.map((memory) => `- ${memory}`).join("\n")
+      ? existingMemories
+          .map((memory) => `- [${memory.id}] ${memory.content}`)
+          .join("\n")
       : "- None",
   ].join("\n");
+}
+
+export function parseMemoryManagerResponse(text: string) {
+  const trimmed = text.trim();
+  const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const rawJson = fencedMatch?.[1]?.trim() ?? trimmed;
+  const start = rawJson.indexOf("{");
+  const end = rawJson.lastIndexOf("}");
+
+  if (start === -1 || end === -1 || end < start) {
+    throw new Error("Memory manager did not return JSON.");
+  }
+
+  const candidate = rawJson.slice(start, end + 1);
+  return memorySyncSchema.parse(JSON.parse(candidate));
+}
+
+export function normalizeMemoryOperations(
+  operations: MemoryOperation[],
+  existingMemories: MemoryReference[],
+) {
+  const existingIds = new Set(existingMemories.map((memory) => memory.id));
+  const seen = new Set<string>();
+  const normalized: MemoryOperation[] = [];
+
+  for (const operation of operations) {
+    if (operation.type === "add") {
+      const content = normalizeMemoryValue(operation.content);
+
+      if (!content) {
+        continue;
+      }
+
+      const key = `add:${content.toLowerCase()}`;
+
+      if (seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+      normalized.push({ type: "add", content });
+      continue;
+    }
+
+    if (!existingIds.has(operation.id)) {
+      continue;
+    }
+
+    if (operation.type === "delete") {
+      const key = `delete:${operation.id}`;
+
+      if (seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+      normalized.push(operation);
+      continue;
+    }
+
+    const content = normalizeMemoryValue(operation.content);
+
+    if (!content) {
+      continue;
+    }
+
+    const key = `update:${operation.id}:${content.toLowerCase()}`;
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    normalized.push({
+      type: "update",
+      id: operation.id,
+      content,
+    });
+  }
+
+  return normalized;
 }
 
 export function isExplicitRememberRequest(text: string) {
