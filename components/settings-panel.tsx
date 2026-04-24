@@ -6,6 +6,7 @@ import {
   Eye,
   EyeOff,
   KeyRound,
+  LoaderCircle,
   Plus,
   RotateCcw,
   Save,
@@ -37,34 +38,39 @@ function createHeaderDrafts(servers: LocalSettings["mcpServers"]) {
   );
 }
 
+function parseMcpServerDraft(
+  server: LocalSettings["mcpServers"][number],
+  headerDrafts: Record<string, string>,
+) {
+  const rawHeaders = headerDrafts[server.id]?.trim() || "{}";
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(rawHeaders) as unknown;
+  } catch {
+    throw new Error("MCP headers must be valid JSON.");
+  }
+
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    Array.isArray(parsed) ||
+    Object.values(parsed).some((value) => typeof value !== "string")
+  ) {
+    throw new Error("MCP headers must be a JSON object with string values.");
+  }
+
+  return {
+    ...server,
+    headers: parsed as Record<string, string>,
+  };
+}
+
 function parseHeaderDrafts(
   servers: LocalSettings["mcpServers"],
   headerDrafts: Record<string, string>,
 ) {
-  return servers.map((server) => {
-    const rawHeaders = headerDrafts[server.id]?.trim() || "{}";
-    let parsed: unknown;
-
-    try {
-      parsed = JSON.parse(rawHeaders) as unknown;
-    } catch {
-      throw new Error("MCP headers must be valid JSON.");
-    }
-
-    if (
-      !parsed ||
-      typeof parsed !== "object" ||
-      Array.isArray(parsed) ||
-      Object.values(parsed).some((value) => typeof value !== "string")
-    ) {
-      throw new Error("MCP headers must be a JSON object with string values.");
-    }
-
-    return {
-      ...server,
-      headers: parsed as Record<string, string>,
-    };
-  });
+  return servers.map((server) => parseMcpServerDraft(server, headerDrafts));
 }
 
 type SettingsPanelProps = {
@@ -80,6 +86,11 @@ type SettingsPanelProps = {
   onRestoreConversation: (conversation: ConversationRecord) => void;
   onSave: (settings: LocalSettings) => void | Promise<void>;
   settings: LocalSettings;
+};
+
+type McpConnectionTestState = {
+  message: string;
+  status: "error" | "success" | "testing";
 };
 
 const CUSTOM_MODEL_CAPABILITY_OPTIONS = [
@@ -132,6 +143,9 @@ function SettingsPanelContent({
 }: SettingsPanelProps) {
   const [draftSettings, setDraftSettings] = useState(settings);
   const [mcpHeaderError, setMcpHeaderError] = useState<string | null>(null);
+  const [mcpTestResults, setMcpTestResults] = useState<
+    Record<string, McpConnectionTestState>
+  >({});
   const [showApiKey, setShowApiKey] = useState(false);
   const backupInputRef = useRef<HTMLInputElement>(null);
   const [headerDrafts, setHeaderDrafts] = useState<Record<string, string>>(
@@ -148,12 +162,73 @@ function SettingsPanelContent({
     serverId: string,
     updater: (server: LocalSettings["mcpServers"][number]) => LocalSettings["mcpServers"][number],
   ) {
+    clearMcpTestResult(serverId);
     setDraftSettings((currentSettings) => ({
       ...currentSettings,
       mcpServers: currentSettings.mcpServers.map((server) =>
         server.id === serverId ? updater(server) : server,
       ),
     }));
+  }
+
+  function clearMcpTestResult(serverId: string) {
+    setMcpTestResults((currentResults) => {
+      if (!currentResults[serverId]) {
+        return currentResults;
+      }
+
+      const nextResults = { ...currentResults };
+      delete nextResults[serverId];
+      return nextResults;
+    });
+  }
+
+  async function handleTestMcpServer(
+    server: LocalSettings["mcpServers"][number],
+  ) {
+    setMcpTestResults((currentResults) => ({
+      ...currentResults,
+      [server.id]: {
+        message: "Testing MCP connection...",
+        status: "testing",
+      },
+    }));
+    setMcpHeaderError(null);
+
+    try {
+      const parsedServer = parseMcpServerDraft(server, headerDrafts);
+      const response = await fetch("/api/mcp-test", {
+        body: JSON.stringify({ server: parsedServer }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+      const payload = (await response.json()) as {
+        message?: string;
+        ok?: boolean;
+      };
+      const message = payload.message ?? "MCP connection test failed.";
+
+      setMcpTestResults((currentResults) => ({
+        ...currentResults,
+        [server.id]: {
+          message,
+          status: response.ok && payload.ok ? "success" : "error",
+        },
+      }));
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "MCP connection test failed.";
+
+      setMcpTestResults((currentResults) => ({
+        ...currentResults,
+        [server.id]: {
+          message,
+          status: "error",
+        },
+      }));
+    }
   }
 
   async function handleSave() {
@@ -452,11 +527,15 @@ function SettingsPanelContent({
               </div>
             ) : (
               <div className="mt-4 space-y-3">
-                {draftSettings.mcpServers.map((server) => (
-                  <div
-                    key={server.id}
-                    className="rounded-[22px] border border-[color:var(--border)] bg-[color:var(--surface-muted)] p-4"
-                  >
+                {draftSettings.mcpServers.map((server) => {
+                  const testResult = mcpTestResults[server.id];
+                  const isTesting = testResult?.status === "testing";
+
+                  return (
+                    <div
+                      key={server.id}
+                      className="rounded-[22px] border border-[color:var(--border)] bg-[color:var(--surface-muted)] p-4"
+                    >
                     <div className="flex items-center justify-between gap-3">
                       <label className="flex items-center gap-2 text-sm text-[color:var(--foreground)]">
                         <input
@@ -471,27 +550,42 @@ function SettingsPanelContent({
                         />
                         Enabled
                       </label>
-                      <button
-                        aria-label={`Remove ${server.name}`}
-                        className="text-[color:var(--muted-foreground)] transition hover:text-[color:var(--danger)]"
-                        title="Remove MCP server"
-                        type="button"
-                        onClick={() => {
-                          setDraftSettings((currentSettings) => ({
-                            ...currentSettings,
-                            mcpServers: currentSettings.mcpServers.filter(
-                              (currentServer) => currentServer.id !== server.id,
-                            ),
-                          }));
-                          setHeaderDrafts((currentDrafts) => {
-                            const nextDrafts = { ...currentDrafts };
-                            delete nextDrafts[server.id];
-                            return nextDrafts;
-                          });
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="inline-flex items-center gap-2 rounded-full border border-[color:var(--border)] px-3 py-1.5 text-xs font-medium text-[color:var(--foreground)] transition hover:border-[color:var(--border-strong)] hover:text-[color:var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-55"
+                          data-testid={`test-mcp-server-${server.id}`}
+                          disabled={isTesting}
+                          type="button"
+                          onClick={() => void handleTestMcpServer(server)}
+                        >
+                          {isTesting ? (
+                            <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                          ) : null}
+                          Test
+                        </button>
+                        <button
+                          aria-label={`Remove ${server.name}`}
+                          className="text-[color:var(--muted-foreground)] transition hover:text-[color:var(--danger)]"
+                          title="Remove MCP server"
+                          type="button"
+                          onClick={() => {
+                            setDraftSettings((currentSettings) => ({
+                              ...currentSettings,
+                              mcpServers: currentSettings.mcpServers.filter(
+                                (currentServer) => currentServer.id !== server.id,
+                              ),
+                            }));
+                            setHeaderDrafts((currentDrafts) => {
+                              const nextDrafts = { ...currentDrafts };
+                              delete nextDrafts[server.id];
+                              return nextDrafts;
+                            });
+                            clearMcpTestResult(server.id);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
 
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -526,14 +620,31 @@ function SettingsPanelContent({
                       value={headerDrafts[server.id] ?? "{}"}
                       onChange={(event) => {
                         setMcpHeaderError(null);
+                        clearMcpTestResult(server.id);
                         setHeaderDrafts((currentDrafts) => ({
                           ...currentDrafts,
                           [server.id]: event.target.value,
                         }));
                       }}
                     />
+                    {testResult ? (
+                      <p
+                        aria-live="polite"
+                        className={`mt-3 rounded-[16px] border px-3 py-2 text-xs leading-5 ${
+                          testResult.status === "success"
+                            ? "border-[color:var(--accent)]/25 bg-[color:var(--accent)]/8 text-[color:var(--accent-strong)]"
+                            : testResult.status === "testing"
+                              ? "border-[color:var(--border)] bg-[color:var(--surface-strong)] text-[color:var(--muted-foreground)]"
+                              : "border-[color:var(--danger)]/25 bg-[color:var(--danger)]/8 text-[color:var(--danger)]"
+                        }`}
+                        data-testid={`mcp-server-test-result-${server.id}`}
+                      >
+                        {testResult.message}
+                      </p>
+                    ) : null}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 

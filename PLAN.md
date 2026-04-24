@@ -16,6 +16,7 @@ Status: in progress.
 - Show routing decisions clearly enough for users to trust model selection. Initial route chips are implemented for auto/fallback assistant messages.
 - Make tool execution state, failures, and outputs easier to inspect without overwhelming the chat. Initial status badges and MCP output formatting are implemented.
 - Make MCP discovery failures visible to the model instead of silently dropping unavailable servers. Discovery now has timeout handling and partial failure summaries.
+- Let users test individual MCP server drafts from Settings before saving them.
 - Improve settings safety for API keys, MCP headers, and draft cancellation. Settings save/cancel behavior now has Playwright coverage.
 - Let users describe custom OpenRouter model capabilities so manual custom models do not get incorrectly bypassed by image/tool fallback routing.
 - Protect custom model capability settings with e2e coverage for disabled/enabled controls and save/reopen persistence.

@@ -84,6 +84,12 @@ export type McpDiscoveryResult = {
     tools: McpToolDefinition[];
   }>;
 };
+export type McpConnectionTestResult = {
+  message: string;
+  ok: boolean;
+  toolCount: number;
+  tools: string[];
+};
 
 type JsonRpcRequest = {
   id?: number | string;
@@ -401,6 +407,33 @@ export async function discoverMcpTools(
     },
     { failures: [], servers: [] },
   );
+}
+
+export async function testMcpServerConnection(
+  server: McpServerConfig,
+  { timeoutMs = 5_000 }: { timeoutMs?: number } = {},
+): Promise<McpConnectionTestResult> {
+  try {
+    const tools = await withTimeout({
+      message: `MCP connection test timed out after ${timeoutMs}ms.`,
+      promise: listMcpTools(server),
+      timeoutMs,
+    });
+
+    return {
+      message: `Connected. Found ${tools.length} tools.`,
+      ok: true,
+      toolCount: tools.length,
+      tools: tools.map((tool) => tool.title ?? tool.name),
+    };
+  } catch (error) {
+    return {
+      message: getUnknownErrorMessage(error),
+      ok: false,
+      toolCount: 0,
+      tools: [],
+    };
+  }
 }
 
 export async function listMcpTools(server: McpServerConfig) {

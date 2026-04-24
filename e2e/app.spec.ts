@@ -98,6 +98,62 @@ test("persists custom model capability settings", async ({ page }) => {
   ).not.toBeChecked();
 });
 
+test("tests MCP server connections from unsaved settings drafts", async ({
+  page,
+}) => {
+  let requestCount = 0;
+  let requestedPayload: {
+    server?: {
+      headers?: Record<string, string>;
+      name?: string;
+      url?: string;
+    };
+  } | null = null;
+
+  await page.route("**/api/mcp-test", async (route) => {
+    requestCount += 1;
+    requestedPayload = route.request().postDataJSON() as typeof requestedPayload;
+    await route.fulfill({
+      body: JSON.stringify({
+        message: "Connected. Found 2 tools.",
+        ok: true,
+        toolCount: 2,
+        tools: ["get_issue", "search"],
+      }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+
+  await page.goto("/");
+  await page.getByTestId("header-settings-button").click();
+  await page.getByRole("button", { name: "Add server" }).click();
+  await page.getByPlaceholder("GitHub MCP").fill("Fixture MCP");
+  await page.getByPlaceholder("https://example.com/mcp").fill("https://example.com/mcp");
+  await page
+    .locator('textarea[placeholder*="Authorization"]')
+    .fill(JSON.stringify({ Authorization: "Bearer test-token" }, null, 2));
+
+  await page.getByRole("button", { name: "Test" }).click();
+
+  await expect(page.getByText("Connected. Found 2 tools.")).toBeVisible();
+  expect(requestedPayload).toMatchObject({
+    server: {
+      headers: {
+        Authorization: "Bearer test-token",
+      },
+      name: "Fixture MCP",
+      url: "https://example.com/mcp",
+    },
+  });
+
+  await page.locator('textarea[placeholder*="Authorization"]').fill("{bad-json");
+  await page.getByRole("button", { name: "Test" }).click();
+
+  await expect(page.getByText("MCP headers must be valid JSON.")).toBeVisible();
+  expect(requestCount).toBe(1);
+});
+
 test("exports memories and MCP settings without the OpenRouter key", async ({
   page,
 }) => {

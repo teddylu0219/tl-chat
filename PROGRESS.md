@@ -1,5 +1,27 @@
 # Progress
 
+## 2026-04-25T03:12:54+08:00
+
+Completed: Added a Settings MCP connectivity test action. Each MCP server draft now has a `Test` button that sends the current unsaved name, URL, and headers to a server-side `/api/mcp-test` route, lists tools through the existing MCP client, and shows per-server success or error status without requiring the settings draft to be saved first.
+
+Verification:
+
+- `npm test`: passed, 11 files and 66 tests.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run test:e2e`: passed, 17 tests.
+
+Screenshots: none captured in this loop. The Settings connectivity flow is covered by Playwright route interception and visible status assertions.
+
+Findings:
+
+- Connectivity testing should happen server-side, not from the browser, so custom headers and MCP Streamable HTTP behavior match chat-time tool discovery.
+- The first e2e attempt exposed duplicate invalid-header messages from per-server and global error regions; the final UI keeps connection-test errors scoped to the server card while preserving global errors for Save/Import/Export failures.
+
+Resolved error:
+
+- A temporary route-level Vitest test failed because this project’s Vitest setup does not resolve the Next `@/` alias when importing App Router route modules directly. The route test was removed; coverage remains on the MCP helper plus the Playwright Settings flow, and `npm run build` verifies the new route compiles.
+
 ## 2026-04-25T02:57:28+08:00
 
 Completed: Added Playwright coverage for custom model capability persistence in Settings. The test verifies capability checkboxes are disabled before a custom model id exists, can be checked after entering a model id, and persist correctly after saving and reopening Settings.

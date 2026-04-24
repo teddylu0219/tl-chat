@@ -30,6 +30,12 @@
       "resolvedAt": "2026-04-25T00:28:57+08:00",
       "status": "resolved",
       "summary": "Settings draft reset used synchronous setState inside useEffect, which failed react-hooks/set-state-in-effect during npm run lint."
+    },
+    {
+      "encounteredAt": "2026-04-25T03:13:54+08:00",
+      "resolvedAt": "2026-04-25T03:14:07+08:00",
+      "status": "resolved",
+      "summary": "A temporary route-level Vitest test failed because direct App Router route imports did not resolve the Next '@/...' alias in the current Vitest setup; removed that test and kept helper plus e2e coverage."
     }
   ],
   "log": [
@@ -202,8 +208,13 @@
       "completedAt": "2026-04-25T02:57:28+08:00",
       "status": "completed",
       "task": "Added Playwright coverage for custom model capability disabled state and save/reopen persistence, then ran npm test, npm run lint, npm run build, and npm run test:e2e successfully."
+    },
+    {
+      "completedAt": "2026-04-25T03:12:54+08:00",
+      "status": "completed",
+      "task": "Added a server-side MCP connectivity test route and Settings Test action for unsaved MCP server drafts, fixed duplicate invalid-header feedback exposed by e2e, and ran npm test, npm run lint, npm run build, and npm run test:e2e successfully."
     }
   ],
-  "nextTask": "Continue from TODO.md with MCP server connectivity testing or model capability visibility improvements.",
-  "updatedAt": "2026-04-25T02:57:28+08:00"
+  "nextTask": "Continue from TODO.md with capability badges, conversation backup import/export, or per-model routing diagnostics.",
+  "updatedAt": "2026-04-25T03:12:54+08:00"
 }

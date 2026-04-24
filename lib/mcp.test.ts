@@ -6,6 +6,7 @@ import {
   discoverMcpTools,
   getActiveMcpServers,
   listMcpTools,
+  testMcpServerConnection,
   type McpServerConfig,
 } from "./mcp";
 
@@ -238,6 +239,24 @@ describe("mcp client", () => {
           ],
         },
       ],
+    });
+  });
+
+  it("returns a connection test failure without throwing", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("unavailable", {
+        status: 503,
+        statusText: "Service Unavailable",
+      }),
+    );
+
+    await expect(
+      testMcpServerConnection(server, { timeoutMs: 1_000 }),
+    ).resolves.toMatchObject({
+      message: expect.stringContaining("Service Unavailable"),
+      ok: false,
+      toolCount: 0,
+      tools: [],
     });
   });
 
