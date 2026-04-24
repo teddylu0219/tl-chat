@@ -474,6 +474,10 @@ function ChatAppInner() {
 
     if (didChange) {
       setMemories(nextMemories);
+      showToast("Memory updated", {
+        actionLabel: "Review memory",
+        onAction: () => setIsSettingsOpen(true),
+      });
     }
   }
 

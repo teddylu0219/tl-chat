@@ -3,12 +3,17 @@
 import { createContext, useCallback, useContext, useState } from "react";
 
 type Toast = {
+  actionLabel?: string;
   id: number;
   message: string;
+  onAction?: () => void;
 };
 
 type ToastContextValue = {
-  showToast: (message: string) => void;
+  showToast: (
+    message: string,
+    options?: { actionLabel?: string; onAction?: () => void },
+  ) => void;
 };
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -28,15 +33,30 @@ export function useToast() {
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const showToast = useCallback((message: string) => {
+  const dismissToast = useCallback((id: number) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id));
+  }, []);
+
+  const showToast = useCallback((message: string, options?: {
+    actionLabel?: string;
+    onAction?: () => void;
+  }) => {
     const id = ++nextToastId;
 
-    setToasts((current) => [...current, { id, message }]);
+    setToasts((current) => [
+      ...current,
+      {
+        actionLabel: options?.actionLabel,
+        id,
+        message,
+        onAction: options?.onAction,
+      },
+    ]);
 
     setTimeout(() => {
-      setToasts((current) => current.filter((toast) => toast.id !== id));
+      dismissToast(id);
     }, 2000);
-  }, []);
+  }, [dismissToast]);
 
   return (
     <ToastContext value={{ showToast }}>
@@ -46,9 +66,21 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           {toasts.map((toast) => (
             <div
               key={toast.id}
-              className="animate-[toast-enter_180ms_ease-out] rounded-full bg-[color:var(--foreground)] px-4 py-2.5 text-[13px] font-medium text-[color:var(--background)] shadow-lg"
+              className="flex animate-[toast-enter_180ms_ease-out] items-center gap-3 rounded-full bg-[color:var(--foreground)] px-4 py-2.5 text-[13px] font-medium text-[color:var(--background)] shadow-lg"
             >
-              {toast.message}
+              <span>{toast.message}</span>
+              {toast.actionLabel && toast.onAction ? (
+                <button
+                  className="rounded-full bg-[color:var(--background)]/12 px-2.5 py-1 text-[12px] font-semibold text-[color:var(--background)] transition hover:bg-[color:var(--background)]/20"
+                  type="button"
+                  onClick={() => {
+                    toast.onAction?.();
+                    dismissToast(toast.id);
+                  }}
+                >
+                  {toast.actionLabel}
+                </button>
+              ) : null}
             </div>
           ))}
         </div>

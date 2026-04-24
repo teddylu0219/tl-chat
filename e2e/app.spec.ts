@@ -100,7 +100,10 @@ test("saves durable memories from user facts", async ({ page }) => {
   await configureLocalKey(page);
   await sendPrompt(page, "i am a student from nycu");
 
-  await page.getByTestId("header-settings-button").click();
+  await expect(
+    page.getByRole("button", { name: "Review memory" }),
+  ).toBeVisible({ timeout: 5_000 });
+  await page.getByRole("button", { name: "Review memory" }).click();
   await expect(page.getByTestId("settings-panel")).toBeVisible();
   await expect(
     page.getByText("User is a student from NYCU", { exact: true }),

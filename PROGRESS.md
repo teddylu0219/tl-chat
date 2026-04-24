@@ -1,5 +1,23 @@
 # Progress
 
+## 2026-04-25T01:54:34+08:00
+
+Completed: Added a memory review affordance after automatic memory updates. Automatic memory changes now show a toast with a `Review memory` action that opens Settings, and the durable memory Playwright test now clicks that action.
+
+Verification:
+
+- `npm test`: passed, 10 files and 57 tests.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run test:e2e`: passed, 12 tests.
+
+Screenshots: none captured in this loop. The affordance is covered by a browser assertion and does not need a screenshot artifact.
+
+Findings:
+
+- Automatic memory updates were previously silent unless the user opened Settings.
+- `TODO.md` active items became empty after this loop, so three next-stage tasks were promoted into Active.
+
 ## 2026-04-25T01:52:40+08:00
 
 Completed: Added Playwright coverage for settings save/cancel behavior. The test verifies a canceled API key draft is discarded and a saved key persists after reopening settings.
