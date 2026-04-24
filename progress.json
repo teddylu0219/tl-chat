@@ -152,8 +152,13 @@
       "completedAt": "2026-04-25T01:51:05+08:00",
       "status": "completed",
       "task": "Improved tool activity cards with status badges, failed styling, and clearer MCP content/structuredContent formatting; verified npm test, npm run lint, and npm run build all pass."
+    },
+    {
+      "completedAt": "2026-04-25T01:52:40+08:00",
+      "status": "completed",
+      "task": "Added Playwright coverage for settings save/cancel behavior and verified npm test, npm run lint, npm run build, and npm run test:e2e all pass."
     }
   ],
-  "nextTask": "Continue from TODO.md with memory review affordance or settings save/cancel coverage.",
-  "updatedAt": "2026-04-25T01:51:05+08:00"
+  "nextTask": "Continue from TODO.md with a memory review affordance after automatic memory updates.",
+  "updatedAt": "2026-04-25T01:52:40+08:00"
 }

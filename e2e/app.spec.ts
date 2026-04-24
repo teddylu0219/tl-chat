@@ -29,6 +29,28 @@ function visibleSidebar(page: Page) {
   return page.locator('[data-testid="chat-sidebar"]:visible');
 }
 
+test("discards canceled settings drafts and persists saved settings", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  await page.getByTestId("header-settings-button").click();
+  await expect(page.getByTestId("settings-panel")).toBeVisible();
+  await page.getByTestId("api-key-input").fill("sk-or-v1-unsaved-key");
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  await expect(page.getByTestId("settings-panel")).toHaveCount(0);
+  await page.getByTestId("header-settings-button").click();
+  await expect(page.getByTestId("api-key-input")).toHaveValue("");
+
+  await page.getByTestId("api-key-input").fill("sk-or-v1-saved-key");
+  await page.getByTestId("save-settings-button").click();
+
+  await expect(page.getByTestId("settings-panel")).toHaveCount(0);
+  await page.getByTestId("header-settings-button").click();
+  await expect(page.getByTestId("api-key-input")).toHaveValue("sk-or-v1-saved-key");
+});
+
 test("renames a thread and keeps it after refresh", async ({ page }) => {
   await page.goto("/");
 

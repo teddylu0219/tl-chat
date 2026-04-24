@@ -15,7 +15,7 @@ Status: in progress.
 
 - Show routing decisions clearly enough for users to trust model selection. Initial route chips are implemented for auto/fallback assistant messages.
 - Make tool execution state, failures, and outputs easier to inspect without overwhelming the chat. Initial status badges and MCP output formatting are implemented.
-- Improve settings safety for API keys, MCP headers, and draft cancellation.
+- Improve settings safety for API keys, MCP headers, and draft cancellation. Settings save/cancel behavior now has Playwright coverage.
 - Record screenshots in `screenshots/` when UI changes are visually validated.
 
 ## Milestone 3: Expand Agentic Workflows

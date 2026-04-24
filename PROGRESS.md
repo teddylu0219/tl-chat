@@ -1,5 +1,23 @@
 # Progress
 
+## 2026-04-25T01:52:40+08:00
+
+Completed: Added Playwright coverage for settings save/cancel behavior. The test verifies a canceled API key draft is discarded and a saved key persists after reopening settings.
+
+Verification:
+
+- `npm test`: passed, 10 files and 57 tests.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run test:e2e`: passed, 12 tests.
+
+Screenshots: none captured in this loop. The new Playwright assertion is state-based and did not require a screenshot artifact.
+
+Findings:
+
+- The existing settings panel reset fix is now protected by an e2e regression test.
+- `npm run test:e2e` rebuilds the app before launching the mock OpenRouter Playwright server.
+
 ## 2026-04-25T01:51:05+08:00
 
 Completed: Improved tool activity cards with Done/Calling/Failed status badges, explicit failed styling, and clearer MCP output formatting for `content` plus `structuredContent`.
