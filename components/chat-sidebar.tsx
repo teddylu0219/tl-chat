@@ -1,7 +1,7 @@
 "use client";
 
 import { MessagesSquare, Pin, Plus, Search, Settings2, X } from "lucide-react";
-import { type KeyboardEvent } from "react";
+import { Fragment, type KeyboardEvent, useId } from "react";
 
 import { ConversationActionMenu } from "@/components/conversation-action-menu";
 import { APP_NAME } from "@/lib/app-config";
@@ -12,6 +12,72 @@ import {
   isPinnedConversation,
 } from "@/lib/conversations";
 import type { ConversationRecord } from "@/lib/persistence";
+
+function getSearchHighlightSegments(text: string, query: string) {
+  const trimmedQuery = query.trim();
+
+  if (!trimmedQuery) {
+    return [{ isMatch: false, text }];
+  }
+
+  const lowerText = text.toLowerCase();
+  const lowerQuery = trimmedQuery.toLowerCase();
+  const segments: Array<{ isMatch: boolean; text: string }> = [];
+  let cursor = 0;
+  let matchIndex = lowerText.indexOf(lowerQuery);
+
+  while (matchIndex !== -1) {
+    if (matchIndex > cursor) {
+      segments.push({
+        isMatch: false,
+        text: text.slice(cursor, matchIndex),
+      });
+    }
+
+    const matchEnd = matchIndex + trimmedQuery.length;
+    segments.push({
+      isMatch: true,
+      text: text.slice(matchIndex, matchEnd),
+    });
+    cursor = matchEnd;
+    matchIndex = lowerText.indexOf(lowerQuery, cursor);
+  }
+
+  if (cursor < text.length) {
+    segments.push({
+      isMatch: false,
+      text: text.slice(cursor),
+    });
+  }
+
+  return segments.length > 0 ? segments : [{ isMatch: false, text }];
+}
+
+function HighlightedText({
+  fallback,
+  query,
+  text,
+}: {
+  fallback?: string;
+  query: string;
+  text: string;
+}) {
+  const content = text || fallback || "";
+
+  return getSearchHighlightSegments(content, query).map((segment, index) =>
+    segment.isMatch ? (
+      <mark
+        key={`${segment.text}-${index}`}
+        className="conversation-search-highlight rounded-md px-0.5 py-px"
+        data-testid="conversation-search-highlight"
+      >
+        {segment.text}
+      </mark>
+    ) : (
+      <Fragment key={`${segment.text}-${index}`}>{segment.text}</Fragment>
+    ),
+  );
+}
 
 function handleThreadListKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
   const navigableKeys = ["ArrowDown", "ArrowUp", "Home", "End"];
@@ -53,6 +119,47 @@ function handleThreadListKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
   items[targetIndex]?.focus();
 }
 
+function getThreadButtons(sidebar: HTMLElement) {
+  return Array.from(
+    sidebar.querySelectorAll<HTMLButtonElement>(
+      '[data-testid^="conversation-item-"]',
+    ),
+  );
+}
+
+function handleSearchKeyDown(
+  event: KeyboardEvent<HTMLInputElement>,
+  conversations: ConversationRecord[],
+  onConversationSelect: (conversationId: string) => void,
+) {
+  if (event.key === "ArrowDown") {
+    const sidebar = event.currentTarget.closest<HTMLElement>(
+      '[data-testid="chat-sidebar"]',
+    );
+    const firstThreadButton = sidebar ? getThreadButtons(sidebar)[0] : null;
+
+    if (firstThreadButton) {
+      event.preventDefault();
+      firstThreadButton.focus();
+    }
+
+    return;
+  }
+
+  if (event.key !== "Enter") {
+    return;
+  }
+
+  const firstConversation = conversations[0];
+
+  if (!firstConversation) {
+    return;
+  }
+
+  event.preventDefault();
+  onConversationSelect(firstConversation.id);
+}
+
 function ThreadCard({
   activeConversationId,
   conversation,
@@ -61,6 +168,7 @@ function ThreadCard({
   onDeleteConversation,
   onPinToggle,
   onRenameConversation,
+  searchQuery,
 }: {
   activeConversationId: string;
   conversation: ConversationRecord;
@@ -69,6 +177,7 @@ function ThreadCard({
   onDeleteConversation: (conversation: ConversationRecord) => void;
   onPinToggle?: (conversation: ConversationRecord) => void;
   onRenameConversation: (conversation: ConversationRecord) => void;
+  searchQuery: string;
 }) {
   const isActive = conversation.id === activeConversationId;
   const isPinned = isPinnedConversation(conversation);
@@ -94,10 +203,19 @@ function ThreadCard({
           <p className="flex items-center gap-1.5 truncate text-[14px] font-medium text-[color:var(--foreground)] transition-colors duration-200 group-hover:text-[color:var(--accent-strong)]">
             {conversation.mode === "council" ? <MessagesSquare className="h-3 w-3 shrink-0 text-[color:var(--accent-strong)]" /> : null}
             {isPinned ? <Pin className="h-3 w-3 shrink-0 text-[color:var(--accent-strong)]" /> : null}
-            <span className="truncate">{getDisplayTitle(conversation)}</span>
+            <span className="truncate">
+              <HighlightedText
+                query={searchQuery}
+                text={getDisplayTitle(conversation)}
+              />
+            </span>
           </p>
           <p className="mt-1 line-clamp-1 text-[12px] leading-5 text-[color:var(--muted-foreground)]">
-            {conversation.previewText || "No messages yet"}
+            <HighlightedText
+              fallback="No messages yet"
+              query={searchQuery}
+              text={conversation.previewText}
+            />
           </p>
           <p className="mt-2 text-[10px] text-[color:var(--muted-foreground)]">
             {formatConversationTimestamp(conversation.updatedAt)}
@@ -149,7 +267,11 @@ export function ChatSidebar({
   searchQuery,
 }: ChatSidebarProps) {
   const hasSearchQuery = searchQuery.trim().length > 0;
+  const resultCountLabel =
+    conversations.length === 1 ? "1 match" : `${conversations.length} matches`;
   const groups = hasSearchQuery ? null : groupConversationsByDate(conversations);
+  const searchHintId = useId();
+  const searchInputId = useId();
 
   return (
     <aside
@@ -188,18 +310,22 @@ export function ChatSidebar({
       </div>
 
       <div className="mt-3.5">
-        <label className="sr-only" htmlFor="sidebar-search-input-field">
+        <label className="sr-only" htmlFor={searchInputId}>
           Search threads
         </label>
         <div className="search-shell flex items-center gap-2 rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface-strong)] px-3 py-2">
           <Search className="h-3.5 w-3.5 shrink-0 text-[color:var(--muted-foreground)]" />
           <input
-            id="sidebar-search-input-field"
+            aria-describedby={hasSearchQuery ? searchHintId : undefined}
             className="w-full bg-transparent text-[13px] text-[color:var(--foreground)] outline-none placeholder:text-[color:var(--muted-foreground)]"
             data-testid="sidebar-search-input"
+            id={searchInputId}
             placeholder="Search threads"
             value={searchQuery}
             onChange={(event) => onSearchChange(event.target.value)}
+            onKeyDown={(event) =>
+              handleSearchKeyDown(event, conversations, onConversationSelect)
+            }
           />
           {hasSearchQuery ? (
             <button
@@ -212,6 +338,17 @@ export function ChatSidebar({
             </button>
           ) : null}
         </div>
+        {hasSearchQuery ? (
+          <p
+            className="mt-2 px-1 text-[11px] leading-5 text-[color:var(--muted-foreground)]"
+            data-testid="sidebar-search-hint"
+            id={searchHintId}
+          >
+            {conversations.length > 0
+              ? `${resultCountLabel}. Press Enter to open the first result.`
+              : "No matches. Try a broader phrase."}
+          </p>
+        ) : null}
       </div>
 
       <div className="scroll-column mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
@@ -244,6 +381,7 @@ export function ChatSidebar({
                       onDeleteConversation={onDeleteConversation}
                       onPinToggle={onPinToggle}
                       onRenameConversation={onRenameConversation}
+                      searchQuery={searchQuery}
                     />
                   ))}
                 </div>
@@ -260,7 +398,9 @@ export function ChatSidebar({
                 onArchiveToggle={onArchiveToggle}
                 onConversationSelect={onConversationSelect}
                 onDeleteConversation={onDeleteConversation}
+                onPinToggle={onPinToggle}
                 onRenameConversation={onRenameConversation}
+                searchQuery={searchQuery}
               />
             ))}
           </div>

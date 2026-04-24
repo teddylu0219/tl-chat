@@ -5,7 +5,6 @@
 - [ ] Add conversation backup export/import UI.
 - [ ] Add per-model routing diagnostics explaining why Auto Router chose or rejected a model.
 - [ ] Add saved prompt templates for common daily-driver workflows.
-- [ ] Add conversation search result highlighting and jump-to-thread keyboard support.
 - [ ] Add memory conflict detection before applying automatic memory updates.
 - [ ] Add MCP tool allow/deny toggles per server in Settings.
 
@@ -26,3 +25,4 @@
 - [x] Add e2e coverage for custom model capability persistence in Settings.
 - [x] Add MCP server connectivity test action in Settings.
 - [x] Add capability badges to model pickers and route metadata chips.
+- [x] Add conversation search result highlighting and jump-to-thread keyboard support.

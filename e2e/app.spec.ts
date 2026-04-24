@@ -369,6 +369,21 @@ test("filters threads through search", async ({ page }) => {
   await expect(conversationItems(page).first()).toContainText(
     "First note about roadmap",
   );
+  await expect(
+    visibleSidebar(page).getByTestId("conversation-search-highlight").first(),
+  ).toHaveText("roadmap");
+  await expect(visibleSidebar(page).getByTestId("sidebar-search-hint")).toContainText(
+    "1 match",
+  );
+
+  await page.getByTestId("sidebar-search-input").press("ArrowDown");
+  await expect(conversationItems(page).first()).toBeFocused();
+
+  await page.getByTestId("sidebar-search-input").focus();
+  await page.getByTestId("sidebar-search-input").press("Enter");
+  await expect(
+    page.getByRole("heading", { name: "First note about roadmap" }),
+  ).toBeVisible();
 });
 
 test("saves durable memories from user facts", async ({ page }) => {

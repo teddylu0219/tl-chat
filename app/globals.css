@@ -204,6 +204,12 @@ textarea {
   letter-spacing: 0.08em;
 }
 
+.conversation-search-highlight {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
 @keyframes menu-pop {
   from {
     opacity: 0;

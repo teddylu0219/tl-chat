@@ -1,5 +1,32 @@
 # Progress
 
+## 2026-04-25T03:43:48+08:00
+
+Completed: Added conversation search result highlighting and keyboard jump support. Search results now mark visible title/preview matches, show a result count with an Enter hint, let ArrowDown move focus from the search box to the first result, and let Enter open the first result. Search-result action menus now keep pin/unpin available.
+
+Verification:
+
+- `npm test`: passed, 11 files and 66 tests.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run test:e2e`: passed, 17 tests.
+- Playwright screenshot capture: passed after running the local production server and installed Playwright browser with approved sandbox escalation.
+
+Screenshots:
+
+- `screenshots/2026-04-25-0336-search-highlight.png`: Desktop sidebar search showing one filtered thread, highlighted `roadmap` match, and the keyboard hint.
+
+Findings:
+
+- Search previously filtered threads without showing where the match happened, which made long histories harder to scan.
+- The visible desktop and mobile sidebars previously reused a fixed search input id when both could exist in the DOM; `useId` now gives each sidebar instance unique search label and hint ids.
+
+Resolved errors:
+
+- `next start` failed inside the restricted sandbox with `listen EPERM` on `127.0.0.1:3100`; reran the local server with approved escalation and stopped it after screenshot capture.
+- Direct Chromium launch failed inside the sandbox with a macOS Mach port permission error; reran Playwright with approved escalation.
+- The Playwright CLI wrapper attempted to fetch `@playwright/cli` from npm and failed under restricted network access; used the repository-installed `playwright` package directly instead.
+
 ## 2026-04-25T03:28:43+08:00
 
 Completed: Added model capability badges to standard chat model controls, route metadata chips, council model selection buttons, council host controls, and selected council model pills. The badges reuse one shared component and expose an accessible capabilities label.

@@ -36,6 +36,18 @@
       "resolvedAt": "2026-04-25T03:14:07+08:00",
       "status": "resolved",
       "summary": "A temporary route-level Vitest test failed because direct App Router route imports did not resolve the Next '@/...' alias in the current Vitest setup; removed that test and kept helper plus e2e coverage."
+    },
+    {
+      "encounteredAt": "2026-04-25T03:35:58+08:00",
+      "resolvedAt": "2026-04-25T03:36:26+08:00",
+      "status": "resolved",
+      "summary": "Local UI screenshot capture hit sandbox restrictions: next start failed with listen EPERM and Chromium launch failed with a macOS Mach port permission error; reran both with approved escalation."
+    },
+    {
+      "encounteredAt": "2026-04-25T03:36:26+08:00",
+      "resolvedAt": "2026-04-25T03:43:48+08:00",
+      "status": "resolved",
+      "summary": "The Playwright CLI wrapper attempted to fetch @playwright/cli from npm under restricted network access; used the repository-installed playwright package directly for screenshot capture."
     }
   ],
   "log": [
@@ -218,8 +230,13 @@
       "completedAt": "2026-04-25T03:28:43+08:00",
       "status": "completed",
       "task": "Added shared model capability badges to chat and council model controls plus route metadata chips, extended Playwright coverage for the active model badge path, verified npm test, npm run lint, npm run build, and npm run test:e2e, and promoted four next-stage TODO items."
+    },
+    {
+      "completedAt": "2026-04-25T03:43:48+08:00",
+      "status": "completed",
+      "task": "Added conversation search highlighting, result count and keyboard hint, ArrowDown focus from search to first result, Enter jump-to-first-result support, preserved pin actions in search results, captured screenshots/2026-04-25-0336-search-highlight.png, and verified npm test, npm run lint, npm run build, and npm run test:e2e all pass."
     }
   ],
-  "nextTask": "Continue from TODO.md with conversation backup import/export, routing diagnostics, prompt templates, search highlighting, memory conflict detection, or MCP tool toggles.",
-  "updatedAt": "2026-04-25T03:28:43+08:00"
+  "nextTask": "Continue from TODO.md with conversation backup import/export, routing diagnostics, prompt templates, memory conflict detection, or MCP tool toggles.",
+  "updatedAt": "2026-04-25T03:43:48+08:00"
 }
