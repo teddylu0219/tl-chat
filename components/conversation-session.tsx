@@ -443,11 +443,65 @@ function formatToolPayload(value: unknown) {
     return value;
   }
 
+  if (isRecord(value) && typeof value.content === "string") {
+    const sections = [value.content.trim()].filter(Boolean);
+
+    if (value.structuredContent) {
+      sections.push(
+        [
+          "Structured content:",
+          formatToolPayload(value.structuredContent),
+        ].join("\n"),
+      );
+    }
+
+    return sections.join("\n\n");
+  }
+
   try {
     return JSON.stringify(value, null, 2);
   } catch {
     return String(value);
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function formatToolStateLabel(state?: string) {
+  if (!state) {
+    return "Queued";
+  }
+
+  if (state.includes("error")) {
+    return "Failed";
+  }
+
+  if (state.includes("output")) {
+    return "Done";
+  }
+
+  if (state.includes("input")) {
+    return "Calling";
+  }
+
+  return state.replace(/-/g, " ");
+}
+
+function getToolStatus(part: UIMessage["parts"][number]) {
+  const output = "output" in part ? part.output : undefined;
+  const hasErrorText = "errorText" in part && Boolean(part.errorText);
+  const hasErrorOutput = isRecord(output) && output.isError === true;
+  const state = "state" in part && typeof part.state === "string"
+    ? part.state
+    : undefined;
+  const isError = hasErrorText || hasErrorOutput || state?.includes("error");
+
+  return {
+    isError,
+    label: isError ? "Failed" : formatToolStateLabel(state),
+  };
 }
 
 function MessageAttachments({ message }: { message: UIMessage }) {
@@ -509,6 +563,7 @@ function ToolActivityList({ message }: { message: UIMessage }) {
   return (
     <div className="mb-3 space-y-2">
       {toolParts.map((part, index) => {
+        const status = getToolStatus(part);
         const payload =
           "output" in part && part.output !== undefined
             ? formatToolPayload(part.output)
@@ -521,17 +576,25 @@ function ToolActivityList({ message }: { message: UIMessage }) {
         return (
           <div
             key={`${part.type}-${"toolCallId" in part ? part.toolCallId : index}`}
-            className="rounded-[18px] border border-[color:var(--border)] bg-[color:var(--surface-muted)] px-4 py-3"
+            className={`rounded-[18px] border px-4 py-3 ${
+              status.isError
+                ? "border-[color:var(--danger)]/30 bg-[color:var(--surface-strong)]"
+                : "border-[color:var(--border)] bg-[color:var(--surface-muted)]"
+            }`}
           >
             <div className="flex items-center justify-between gap-3">
               <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--muted-foreground)]">
                 {getToolDisplayName(part)}
               </p>
-              {"state" in part ? (
-                <span className="text-[11px] text-[color:var(--muted-foreground)]">
-                  {part.state}
-                </span>
-              ) : null}
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] ${
+                  status.isError
+                    ? "bg-[color:var(--danger)]/10 text-[color:var(--danger)]"
+                    : "bg-[color:var(--surface-strong)] text-[color:var(--muted-foreground)]"
+                }`}
+              >
+                {status.label}
+              </span>
             </div>
             {payload ? (
               <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-words text-[12px] leading-6 text-[color:var(--foreground)]">

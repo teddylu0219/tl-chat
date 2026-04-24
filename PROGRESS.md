@@ -1,5 +1,22 @@
 # Progress
 
+## 2026-04-25T01:51:05+08:00
+
+Completed: Improved tool activity cards with Done/Calling/Failed status badges, explicit failed styling, and clearer MCP output formatting for `content` plus `structuredContent`.
+
+Verification:
+
+- `npm test`: passed, 10 files and 57 tests.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+
+Screenshots: none captured in this loop. Tool activity cards require a completed tool call in browser state; this loop used code/build verification only.
+
+Findings:
+
+- MCP tool outputs already include `isError`, `content`, and optional `structuredContent`; the UI was previously rendering that whole object as raw JSON.
+- Failed tool calls are now identifiable from `errorText`, output `isError`, or an error state string.
+
 ## 2026-04-25T01:49:55+08:00
 
 Completed: Added a compact route metadata chip for assistant messages when the route mode is `auto` or `fallback`; manual routes remain hidden to avoid noise.
