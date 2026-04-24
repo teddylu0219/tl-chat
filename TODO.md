@@ -3,7 +3,6 @@
 ## Active
 
 - [ ] Add MCP server connectivity test action in Settings.
-- [ ] Add e2e coverage for custom model capability persistence in Settings.
 - [ ] Add capability badges to model pickers and route metadata chips.
 - [ ] Add conversation backup export/import UI.
 - [ ] Add per-model routing diagnostics explaining why Auto Router chose or rejected a model.
@@ -22,3 +21,4 @@
 - [x] Add Settings UI import action for memories and MCP server settings.
 - [x] Add custom model capability flags in Settings so auto-routing can treat custom OpenRouter models accurately.
 - [x] Add invalid backup import e2e coverage for rejected JSON/schema files.
+- [x] Add e2e coverage for custom model capability persistence in Settings.

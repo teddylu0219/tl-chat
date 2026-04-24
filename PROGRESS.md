@@ -1,5 +1,23 @@
 # Progress
 
+## 2026-04-25T02:57:28+08:00
+
+Completed: Added Playwright coverage for custom model capability persistence in Settings. The test verifies capability checkboxes are disabled before a custom model id exists, can be checked after entering a model id, and persist correctly after saving and reopening Settings.
+
+Verification:
+
+- `npm test`: passed, 11 files and 65 tests.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run test:e2e`: passed, 16 tests.
+
+Screenshots: none captured in this loop. The Settings persistence behavior is covered by browser assertions.
+
+Findings:
+
+- The custom capability UI and routing logic were implemented, but the save/reopen IndexedDB path did not yet have browser coverage.
+- The test also protects the disabled precondition so users cannot toggle capability flags before defining a custom model id.
+
 ## 2026-04-25T02:44:44+08:00
 
 Completed: Added Playwright coverage for invalid Settings backup imports. The new e2e test uploads malformed JSON and schema-invalid JSON, verifies the inline Settings error appears, and confirms the existing OpenRouter key plus memory/MCP state are not changed.

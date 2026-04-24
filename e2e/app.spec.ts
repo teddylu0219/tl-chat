@@ -53,6 +53,51 @@ test("discards canceled settings drafts and persists saved settings", async ({
   await expect(page.getByTestId("api-key-input")).toHaveValue("sk-or-v1-saved-key");
 });
 
+test("persists custom model capability settings", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByTestId("header-settings-button").click();
+  await expect(page.getByTestId("settings-panel")).toBeVisible();
+
+  const supportsImages = page.getByTestId(
+    "custom-model-capability-supportsImages",
+  );
+  const supportsTools = page.getByTestId(
+    "custom-model-capability-supportsTools",
+  );
+  const supportsReasoning = page.getByTestId(
+    "custom-model-capability-supportsReasoning",
+  );
+  const supportsCode = page.getByTestId("custom-model-capability-supportsCode");
+
+  await expect(supportsImages).toBeDisabled();
+  await page.getByLabel("Custom model id").fill("custom/omni-router");
+  await supportsImages.check();
+  await supportsTools.check();
+  await supportsCode.check();
+  await expect(supportsReasoning).not.toBeChecked();
+
+  await page.getByTestId("save-settings-button").click();
+
+  await expect(page.getByTestId("settings-panel")).toHaveCount(0);
+  await page.getByTestId("header-settings-button").click();
+  await expect(page.getByLabel("Custom model id")).toHaveValue(
+    "custom/omni-router",
+  );
+  await expect(
+    page.getByTestId("custom-model-capability-supportsImages"),
+  ).toBeChecked();
+  await expect(
+    page.getByTestId("custom-model-capability-supportsTools"),
+  ).toBeChecked();
+  await expect(
+    page.getByTestId("custom-model-capability-supportsCode"),
+  ).toBeChecked();
+  await expect(
+    page.getByTestId("custom-model-capability-supportsReasoning"),
+  ).not.toBeChecked();
+});
+
 test("exports memories and MCP settings without the OpenRouter key", async ({
   page,
 }) => {
