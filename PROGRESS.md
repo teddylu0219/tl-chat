@@ -1,5 +1,26 @@
 # Progress
 
+## 2026-04-25T01:58:51+08:00
+
+Completed: Added MCP discovery timeout and partial failure summaries. Healthy MCP servers still register tools while failed servers produce a warning that is included in the system prompt for relevant user requests.
+
+Verification:
+
+- `npm test -- lib/mcp.test.ts`: passed, 5 tests.
+- `npm test`: passed, 10 files and 58 tests.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+
+Screenshots: none captured in this loop. This was server-side/tool-discovery behavior.
+
+Resolved error:
+
+- `npm run build` failed because TypeScript did not narrow `item.failure` in `discoverMcpTools`; `"failure" in item` still allowed `undefined`.
+
+Recovery:
+
+- Added an explicit truthy check before pushing the failure record.
+
 ## 2026-04-25T01:56:20+08:00
 
 Completed: Added composer help text for multimodal attachment limits and supported file families, backed by the same constants used by attachment handling. The attach button now references the help text with `aria-describedby`.

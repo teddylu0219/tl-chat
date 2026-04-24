@@ -2,7 +2,6 @@
 
 ## Active
 
-- [ ] Add timeout and partial failure summaries when some MCP servers fail during tool discovery.
 - [ ] Add export/import for memories and MCP server settings.
 
 ## Backlog
@@ -17,3 +16,4 @@
 - [x] Add Playwright coverage for settings save/cancel behavior.
 - [x] Add a memory review affordance after automatic memory updates.
 - [x] Add user-facing help text for attachment limits and supported file types near the composer.
+- [x] Add timeout and partial failure summaries when some MCP servers fail during tool discovery.

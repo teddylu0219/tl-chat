@@ -15,6 +15,7 @@ Status: in progress.
 
 - Show routing decisions clearly enough for users to trust model selection. Initial route chips are implemented for auto/fallback assistant messages.
 - Make tool execution state, failures, and outputs easier to inspect without overwhelming the chat. Initial status badges and MCP output formatting are implemented.
+- Make MCP discovery failures visible to the model instead of silently dropping unavailable servers. Discovery now has timeout handling and partial failure summaries.
 - Improve settings safety for API keys, MCP headers, and draft cancellation. Settings save/cancel behavior now has Playwright coverage.
 - Add safer memory review and conflict handling. Automatic memory updates now expose a review action that opens settings.
 - Make multimodal limits understandable before upload. Composer attachment help text now lists limits and supported text-like file families.

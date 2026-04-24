@@ -167,8 +167,13 @@
       "completedAt": "2026-04-25T01:56:20+08:00",
       "status": "completed",
       "task": "Added composer attachment limit and supported file type help text with aria-describedby, covered it in Playwright, and verified npm test, npm run lint, npm run build, and npm run test:e2e all pass."
+    },
+    {
+      "completedAt": "2026-04-25T01:58:51+08:00",
+      "status": "completed",
+      "task": "Added MCP discovery timeout and partial failure summaries, fixed a TypeScript narrowing build error, and verified npm test -- lib/mcp.test.ts, npm test, npm run lint, and npm run build all pass."
     }
   ],
-  "nextTask": "Continue from TODO.md with MCP discovery partial failure summaries.",
-  "updatedAt": "2026-04-25T01:56:20+08:00"
+  "nextTask": "Continue from TODO.md with export/import for memories and MCP server settings.",
+  "updatedAt": "2026-04-25T01:58:51+08:00"
 }

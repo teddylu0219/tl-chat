@@ -12,7 +12,13 @@ import {
 import { ZodError, z } from "zod";
 
 import { parseChatRequest } from "@/lib/chat-schema";
-import { callMcpTool, createMcpToolKey, getActiveMcpServers, listMcpTools } from "@/lib/mcp";
+import {
+  callMcpTool,
+  createMcpToolKey,
+  discoverMcpTools,
+  getActiveMcpServers,
+  type McpDiscoveryFailure,
+} from "@/lib/mcp";
 import { getModelOption, modelSupportsTools } from "@/lib/models";
 import { createOpenRouterProvider, getErrorMessage, getErrorStatus } from "@/lib/openrouter";
 import { resolveModelRoute } from "@/lib/router";
@@ -69,6 +75,18 @@ function buildCapabilityPrompt() {
     "Use tools when they help you answer more accurately.",
     "If the user explicitly asks you to remember or forget something long-term, use the memory tools instead of only promising.",
     "Do not invent tool outputs. If a tool fails, say what failed and continue with the best fallback you can.",
+  ].join("\n");
+}
+
+function buildMcpDiscoveryPrompt(failures: McpDiscoveryFailure[]) {
+  if (failures.length === 0) {
+    return "";
+  }
+
+  return [
+    "Some MCP servers were unavailable during tool discovery.",
+    "If the user asks for a tool from one of these servers, briefly mention the failure and continue with available tools.",
+    ...failures.map((failure) => `- ${failure.serverName}: ${failure.message}`),
   ].join("\n");
 }
 
@@ -166,73 +184,68 @@ async function buildMcpTools(
   const activeServers = getActiveMcpServers(servers);
 
   if (activeServers.length === 0) {
-    return {};
+    return {
+      failures: [],
+      tools: {},
+    };
   }
 
   const usedToolKeys = new Set<string>();
-  const settled = await Promise.allSettled(
-    activeServers.map(async (server) => ({
-      server,
-      tools: await listMcpTools(server),
-    })),
-  );
+  const discovered = await discoverMcpTools(activeServers);
 
-  return settled.reduce<Record<string, ReturnType<typeof dynamicTool>>>(
-    (toolSet, result) => {
-      if (result.status !== "fulfilled") {
+  return {
+    failures: discovered.failures,
+    tools: discovered.servers.reduce<Record<string, ReturnType<typeof dynamicTool>>>(
+      (toolSet, { server, tools }) => {
+        for (const mcpTool of tools) {
+          const toolKey = createMcpToolKey({
+            serverName: server.name,
+            toolName: mcpTool.name,
+            usedKeys: usedToolKeys,
+          });
+
+          toolSet[toolKey] = dynamicTool({
+            description:
+              [
+                `MCP tool from ${server.name}.`,
+                mcpTool.description?.trim(),
+              ]
+                .filter(Boolean)
+                .join(" "),
+            execute: async (args) => {
+              try {
+                const result = await callMcpTool({
+                  args: (args as Record<string, unknown>) ?? {},
+                  server,
+                  toolName: mcpTool.name,
+                });
+
+                return {
+                  content: result.text,
+                  isError: result.isError,
+                  server: server.name,
+                  structuredContent: result.structuredContent ?? null,
+                  tool: mcpTool.name,
+                };
+              } catch (error) {
+                return {
+                  content: getErrorMessage(error),
+                  isError: true,
+                  server: server.name,
+                  tool: mcpTool.name,
+                };
+              }
+            },
+            inputSchema: jsonSchema(mcpTool.inputSchema as JSONSchema7),
+            title: `${server.name}: ${mcpTool.title ?? mcpTool.name}`,
+          });
+        }
+
         return toolSet;
-      }
-
-      const { server, tools } = result.value;
-
-      for (const mcpTool of tools) {
-        const toolKey = createMcpToolKey({
-          serverName: server.name,
-          toolName: mcpTool.name,
-          usedKeys: usedToolKeys,
-        });
-
-        toolSet[toolKey] = dynamicTool({
-          description:
-            [
-              `MCP tool from ${server.name}.`,
-              mcpTool.description?.trim(),
-            ]
-              .filter(Boolean)
-              .join(" "),
-          execute: async (args) => {
-            try {
-              const result = await callMcpTool({
-                args: (args as Record<string, unknown>) ?? {},
-                server,
-                toolName: mcpTool.name,
-              });
-
-              return {
-                content: result.text,
-                isError: result.isError,
-                server: server.name,
-                structuredContent: result.structuredContent ?? null,
-                tool: mcpTool.name,
-              };
-            } catch (error) {
-              return {
-                content: getErrorMessage(error),
-                isError: true,
-                server: server.name,
-                tool: mcpTool.name,
-              };
-            }
-          },
-          inputSchema: jsonSchema(mcpTool.inputSchema as JSONSchema7),
-          title: `${server.name}: ${mcpTool.title ?? mcpTool.name}`,
-        });
-      }
-
-      return toolSet;
-    },
-    {},
-  );
+      },
+      {},
+    ),
+  };
 }
 
 export async function POST(request: Request) {
@@ -275,16 +288,23 @@ export async function POST(request: Request) {
         };
       },
     });
+    const mcpToolDiscovery = canUseTools
+      ? await buildMcpTools(body.mcpServers)
+      : { failures: [], tools: {} };
     const tools = canUseTools
       ? {
           get_current_time: buildCurrentTimeTool(),
           search_memories: buildSearchMemoriesTool(body.memories),
           ...buildMemoryMutationTools(),
-          ...(await buildMcpTools(body.mcpServers)),
+          ...mcpToolDiscovery.tools,
         }
       : undefined;
     const fullSystemPrompt =
-      [body.systemPrompt?.trim(), canUseTools ? buildCapabilityPrompt() : ""]
+      [
+        body.systemPrompt?.trim(),
+        canUseTools ? buildCapabilityPrompt() : "",
+        canUseTools ? buildMcpDiscoveryPrompt(mcpToolDiscovery.failures) : "",
+      ]
         .filter(Boolean)
         .join("\n\n") || undefined;
     const result = streamText({

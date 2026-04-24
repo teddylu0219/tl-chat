@@ -73,6 +73,17 @@ export const mcpServerConfigSchema = z.object({
 
 export type McpServerConfig = z.infer<typeof mcpServerConfigSchema>;
 export type McpToolDefinition = z.infer<typeof mcpToolSchema>;
+export type McpDiscoveryFailure = {
+  message: string;
+  serverName: string;
+};
+export type McpDiscoveryResult = {
+  failures: McpDiscoveryFailure[];
+  servers: Array<{
+    server: McpServerConfig;
+    tools: McpToolDefinition[];
+  }>;
+};
 
 type JsonRpcRequest = {
   id?: number | string;
@@ -87,6 +98,33 @@ type McpSession = {
 
 function nextRequestId() {
   return Math.floor(Math.random() * 1_000_000_000);
+}
+
+function getUnknownErrorMessage(error: unknown) {
+  return error instanceof Error && error.message
+    ? error.message
+    : "Unknown MCP discovery error.";
+}
+
+function withTimeout<T>({
+  message,
+  promise,
+  timeoutMs,
+}: {
+  message: string;
+  promise: Promise<T>;
+  timeoutMs: number;
+}) {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  });
 }
 
 function parseSseResponse(text: string) {
@@ -320,6 +358,48 @@ export function createMcpServerConfig(): McpServerConfig {
 export function getActiveMcpServers(servers: McpServerConfig[]) {
   return servers.filter(
     (server) => server.enabled && server.name.trim() && server.url.trim(),
+  );
+}
+
+export async function discoverMcpTools(
+  servers: McpServerConfig[],
+  { timeoutMs = 8_000 }: { timeoutMs?: number } = {},
+): Promise<McpDiscoveryResult> {
+  const discovered = await Promise.all(
+    getActiveMcpServers(servers).map(async (server) => {
+      try {
+        const tools = await withTimeout({
+          message: `MCP tool discovery timed out after ${timeoutMs}ms.`,
+          promise: listMcpTools(server),
+          timeoutMs,
+        });
+
+        return {
+          server,
+          tools,
+        };
+      } catch (error) {
+        return {
+          failure: {
+            message: getUnknownErrorMessage(error),
+            serverName: server.name,
+          },
+        };
+      }
+    }),
+  );
+
+  return discovered.reduce<McpDiscoveryResult>(
+    (result, item) => {
+      if ("failure" in item && item.failure) {
+        result.failures.push(item.failure);
+        return result;
+      }
+
+      result.servers.push(item);
+      return result;
+    },
+    { failures: [], servers: [] },
   );
 }
 

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   callMcpTool,
   createMcpToolKey,
+  discoverMcpTools,
   getActiveMcpServers,
   listMcpTools,
   type McpServerConfig,
@@ -165,6 +166,78 @@ describe("mcp client", () => {
         "Mcp-Session-Id": "session-123",
         "Mcp-Method": "tools/list",
       }),
+    });
+  });
+
+  it("keeps healthy MCP tools and reports partial discovery failures", async () => {
+    const healthyServer = {
+      ...server,
+      id: "healthy-server",
+      name: "Healthy MCP",
+      url: "https://healthy.example.com/mcp",
+    };
+    const failingServer = {
+      ...server,
+      id: "failing-server",
+      name: "Broken MCP",
+      url: "https://broken.example.com/mcp",
+    };
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (String(input).includes("broken.example.com")) {
+        return new Response("unavailable", {
+          status: 503,
+          statusText: "Service Unavailable",
+        });
+      }
+
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        id?: number;
+        method: string;
+      };
+
+      if (body.method === "initialize") {
+        return jsonRpcResponse(body.id ?? 1, {
+          protocolVersion: "2025-06-18",
+          serverInfo: { name: "fixture", version: "1.0.0" },
+        });
+      }
+
+      if (body.method === "notifications/initialized") {
+        return new Response(null, { status: 202 });
+      }
+
+      return jsonRpcResponse(body.id ?? 2, {
+        tools: [
+          {
+            inputSchema: {
+              type: "object",
+            },
+            name: "healthy_tool",
+          },
+        ],
+      });
+    });
+
+    await expect(
+      discoverMcpTools([healthyServer, failingServer], { timeoutMs: 1_000 }),
+    ).resolves.toMatchObject({
+      failures: [
+        {
+          message: expect.stringContaining("Service Unavailable"),
+          serverName: "Broken MCP",
+        },
+      ],
+      servers: [
+        {
+          server: healthyServer,
+          tools: [
+            {
+              name: "healthy_tool",
+            },
+          ],
+        },
+      ],
     });
   });
 
