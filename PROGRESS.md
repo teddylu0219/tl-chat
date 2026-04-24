@@ -1,5 +1,23 @@
 # Progress
 
+## 2026-04-25T01:56:20+08:00
+
+Completed: Added composer help text for multimodal attachment limits and supported file families, backed by the same constants used by attachment handling. The attach button now references the help text with `aria-describedby`.
+
+Verification:
+
+- `npm test`: passed, 10 files and 57 tests.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run test:e2e`: passed, 12 tests.
+
+Screenshots: none captured in this loop. The help text is covered by a Playwright visibility assertion.
+
+Findings:
+
+- Attachment rejection paths existed, but the user only learned limits after selecting files.
+- The composer now states the 4-file limit, 4MB image limit, and 12k text extraction limit before upload.
+
 ## 2026-04-25T01:54:34+08:00
 
 Completed: Added a memory review affordance after automatic memory updates. Automatic memory changes now show a toast with a `Review memory` action that opens Settings, and the durable memory Playwright test now clicks that action.

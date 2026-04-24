@@ -34,6 +34,7 @@ test("discards canceled settings drafts and persists saved settings", async ({
 }) => {
   await page.goto("/");
 
+  await expect(page.getByText("Attach up to 4 files")).toBeVisible();
   await page.getByTestId("header-settings-button").click();
   await expect(page.getByTestId("settings-panel")).toBeVisible();
   await page.getByTestId("api-key-input").fill("sk-or-v1-unsaved-key");

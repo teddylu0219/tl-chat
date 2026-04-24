@@ -39,6 +39,8 @@ import { useToast } from "@/components/toast";
 import { APP_NAME } from "@/lib/app-config";
 import {
   MAX_ATTACHMENTS,
+  MAX_IMAGE_ATTACHMENT_BYTES,
+  MAX_TEXT_ATTACHMENT_CHARS,
   type ComposerAttachment,
   isAttachmentTextPart,
   prepareComposerAttachments,
@@ -79,7 +81,10 @@ type ConversationSessionProps = {
 };
 
 const CHAT_STREAM_THROTTLE_MS = 120;
+const COMPOSER_ATTACHMENT_HELP_ID = "composer-attachment-help";
+const IMAGE_ATTACHMENT_LIMIT_MB = MAX_IMAGE_ATTACHMENT_BYTES / 1024 / 1024;
 const LARGE_MESSAGE_RICH_RENDER_THRESHOLD = 2400;
+const TEXT_ATTACHMENT_LIMIT_LABEL = `${Math.round(MAX_TEXT_ATTACHMENT_CHARS / 1000)}k`;
 
 type RouteMetadata = {
   routeMode?: string;
@@ -1332,6 +1337,15 @@ export function ConversationSession({
             </div>
           ) : null}
 
+          <p
+            id={COMPOSER_ATTACHMENT_HELP_ID}
+            className="px-2.5 pb-1 text-[11px] leading-5 text-[color:var(--muted-foreground)]"
+          >
+            Attach up to {MAX_ATTACHMENTS} files: images up to{" "}
+            {IMAGE_ATTACHMENT_LIMIT_MB}MB each, plus Markdown, text, CSV,
+            JSON/YAML, HTML/CSS/JS/TS files up to {TEXT_ATTACHMENT_LIMIT_LABEL} chars.
+          </p>
+
           <textarea
             ref={textareaRef}
             className="min-h-[54px] w-full resize-none bg-transparent px-2.5 py-2 text-[14px] leading-6 text-[color:var(--foreground)] outline-none placeholder:text-[color:var(--muted-foreground)]"
@@ -1382,6 +1396,7 @@ export function ConversationSession({
             <div className="flex items-center gap-2">
               <button
                 aria-label="Attach files"
+                aria-describedby={COMPOSER_ATTACHMENT_HELP_ID}
                 className="flex h-9 w-9 items-center justify-center rounded-full text-[color:var(--muted-foreground)] transition hover:text-[color:var(--foreground)]"
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
