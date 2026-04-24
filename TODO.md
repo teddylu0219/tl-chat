@@ -2,11 +2,13 @@
 
 ## Active
 
-- [ ] Add Settings UI import action for memories and MCP server settings.
+- [ ] Add custom model capability flags in Settings so auto-routing can treat custom OpenRouter models accurately.
+- [ ] Add invalid backup import e2e coverage for rejected JSON/schema files.
+- [ ] Add MCP server connectivity test action in Settings.
 
 ## Backlog
 
-- [ ] Evaluate whether custom OpenRouter models should expose user-configurable capability flags.
+- [ ] Add conversation backup export/import.
 
 ## Done
 
@@ -19,3 +21,4 @@
 - [x] Add timeout and partial failure summaries when some MCP servers fail during tool discovery.
 - [x] Add backup schema helpers for memories and MCP server settings.
 - [x] Add Settings UI export action for memories and MCP server settings.
+- [x] Add Settings UI import action for memories and MCP server settings.

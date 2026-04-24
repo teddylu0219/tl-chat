@@ -1,5 +1,33 @@
 # Progress
 
+## 2026-04-25T02:18:36+08:00
+
+Completed: Added Settings UI import action for memories and MCP server settings. Importing a valid backup replaces memories and MCP servers, preserves the OpenRouter API key, updates the open Settings draft, persists imported data to IndexedDB, and shows an import toast.
+
+Verification:
+
+- `npm test`: passed, 11 files and 61 tests.
+- `npm run lint`: passed.
+- `npm run build`: passed after rerunning outside the restricted sandbox because `next/font` needed Google Fonts access.
+- `npm run test:e2e`: passed, 14 tests.
+
+Screenshots: none captured in this loop. The import flow is covered by Playwright assertions for persistence, visible Settings values, and API key preservation.
+
+Findings:
+
+- The Settings import/export path now covers the complete backup round trip for memories and MCP server settings.
+- `TODO.md` active items became empty after this loop, so three next-stage tasks were promoted into Active.
+
+Resolved error:
+
+- `npm run test:e2e` initially failed because the new Playwright test used `page.getByDisplayValue`, which is not available in this project setup.
+- `npm run build` and the first `npm run test:e2e` attempt hit restricted-sandbox Google Fonts fetch failures from `next/font`; rerunning with approved escalation resolved the environment issue.
+
+Recovery:
+
+- Replaced it with placeholder locators plus `toHaveValue`.
+- Approved scoped prefixes for `npm run build` and `npm run test:e2e` so future heartbeat loops can verify Next builds that fetch fonts.
+
 ## 2026-04-25T02:03:14+08:00
 
 Completed: Added a Settings UI export action for memories and MCP server settings. The exported JSON uses the versioned backup schema and intentionally excludes the OpenRouter API key.

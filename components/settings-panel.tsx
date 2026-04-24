@@ -10,9 +10,10 @@ import {
   RotateCcw,
   Save,
   Trash2,
+  Upload,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { MemoryManager } from "@/components/memory-manager";
 import { formatConversationTimestamp, getDisplayTitle } from "@/lib/conversations";
@@ -21,7 +22,11 @@ import type { MemoryEntry } from "@/lib/memory";
 import { THEME_OPTIONS } from "@/lib/app-config";
 import { getModelOptions } from "@/lib/models";
 import type { ConversationRecord, LocalSettings } from "@/lib/persistence";
-import { createSettingsBackup } from "@/lib/settings-backup";
+import {
+  createSettingsBackup,
+  parseSettingsBackup,
+  type SettingsBackup,
+} from "@/lib/settings-backup";
 
 function createHeaderDrafts(servers: LocalSettings["mcpServers"]) {
   return Object.fromEntries(
@@ -71,6 +76,7 @@ type SettingsPanelProps = {
   onClearMemories: () => void;
   onClose: () => void;
   onDeleteMemory: (id: string) => void;
+  onImportBackup: (backup: SettingsBackup) => void | Promise<void>;
   onRestoreConversation: (conversation: ConversationRecord) => void;
   onSave: (settings: LocalSettings) => void | Promise<void>;
   settings: LocalSettings;
@@ -92,6 +98,7 @@ function SettingsPanelContent({
   onClearMemories,
   onClose,
   onDeleteMemory,
+  onImportBackup,
   onRestoreConversation,
   onSave,
   settings,
@@ -99,6 +106,7 @@ function SettingsPanelContent({
   const [draftSettings, setDraftSettings] = useState(settings);
   const [mcpHeaderError, setMcpHeaderError] = useState<string | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
+  const backupInputRef = useRef<HTMLInputElement>(null);
   const [headerDrafts, setHeaderDrafts] = useState<Record<string, string>>(
     () => createHeaderDrafts(settings.mcpServers),
   );
@@ -131,6 +139,29 @@ function SettingsPanelContent({
         error instanceof Error
           ? error.message
           : "MCP headers must be valid JSON.",
+      );
+    }
+  }
+
+  async function handleImportBackup(file: File | undefined) {
+    if (!file) {
+      return;
+    }
+
+    try {
+      const backup = parseSettingsBackup(await file.text());
+      await onImportBackup(backup);
+      setDraftSettings((currentSettings) => ({
+        ...currentSettings,
+        mcpServers: backup.mcpServers,
+      }));
+      setHeaderDrafts(createHeaderDrafts(backup.mcpServers));
+      setMcpHeaderError(null);
+    } catch (error) {
+      setMcpHeaderError(
+        error instanceof Error
+          ? error.message
+          : "Settings backup could not be imported.",
       );
     }
   }
@@ -462,18 +493,41 @@ function SettingsPanelContent({
                 </h3>
                 <p className="mt-1 text-sm leading-6 text-[color:var(--muted-foreground)]">
                   Export memories and MCP servers as JSON. OpenRouter keys are
-                  intentionally excluded.
+                  intentionally excluded. Import replaces memories and MCP
+                  servers, while keeping your API key.
                 </p>
               </div>
-              <button
-                className="flex shrink-0 items-center gap-2 rounded-full border border-[color:var(--border)] px-3 py-2 text-sm text-[color:var(--foreground)] transition hover:border-[color:var(--border-strong)] hover:text-[color:var(--accent-strong)]"
-                data-testid="export-settings-backup-button"
-                type="button"
-                onClick={handleExportBackup}
-              >
-                <Download className="h-4 w-4" />
-                Export
-              </button>
+              <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                <input
+                  ref={backupInputRef}
+                  accept="application/json,.json"
+                  className="hidden"
+                  data-testid="import-settings-backup-input"
+                  type="file"
+                  onChange={(event) => {
+                    void handleImportBackup(event.target.files?.[0]);
+                    event.target.value = "";
+                  }}
+                />
+                <button
+                  className="flex items-center gap-2 rounded-full border border-[color:var(--border)] px-3 py-2 text-sm text-[color:var(--foreground)] transition hover:border-[color:var(--border-strong)] hover:text-[color:var(--accent-strong)]"
+                  data-testid="import-settings-backup-button"
+                  type="button"
+                  onClick={() => backupInputRef.current?.click()}
+                >
+                  <Upload className="h-4 w-4" />
+                  Import
+                </button>
+                <button
+                  className="flex items-center gap-2 rounded-full border border-[color:var(--border)] px-3 py-2 text-sm text-[color:var(--foreground)] transition hover:border-[color:var(--border-strong)] hover:text-[color:var(--accent-strong)]"
+                  data-testid="export-settings-backup-button"
+                  type="button"
+                  onClick={handleExportBackup}
+                >
+                  <Download className="h-4 w-4" />
+                  Export
+                </button>
+              </div>
             </div>
           </section>
 

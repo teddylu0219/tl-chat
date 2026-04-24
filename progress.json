@@ -182,8 +182,13 @@
       "completedAt": "2026-04-25T02:03:14+08:00",
       "status": "completed",
       "task": "Added Settings UI export action for memories and MCP server settings, verified exported JSON excludes OpenRouter keys with Playwright, and ran npm test, npm run lint, npm run build, and npm run test:e2e successfully."
+    },
+    {
+      "completedAt": "2026-04-25T02:18:36+08:00",
+      "status": "completed",
+      "task": "Added Settings UI import action for memories and MCP server settings, preserved OpenRouter keys during import, covered it with Playwright, resolved a Playwright locator error, reran build/e2e with approved font-fetch access, and promoted three next-stage TODO items."
     }
   ],
-  "nextTask": "Continue from TODO.md with Settings UI import action for memories and MCP server settings.",
-  "updatedAt": "2026-04-25T02:03:14+08:00"
+  "nextTask": "Continue from TODO.md with custom model capability flags in Settings.",
+  "updatedAt": "2026-04-25T02:18:36+08:00"
 }

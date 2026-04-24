@@ -42,6 +42,7 @@ import {
   saveSettings,
   unpinConversation,
 } from "@/lib/persistence";
+import type { SettingsBackup } from "@/lib/settings-backup";
 
 function upsertConversation(
   conversations: ConversationRecord[],
@@ -214,6 +215,21 @@ function ChatAppInner() {
     }
 
     setIsSettingsOpen(false);
+  }
+
+  async function handleImportSettingsBackup(backup: SettingsBackup) {
+    await clearMemories();
+    await Promise.all(backup.memories.map((memory) => saveMemory(memory)));
+
+    const nextSettings = await saveSettings({
+      mcpServers: backup.mcpServers,
+    });
+
+    setMemories(backup.memories);
+    setSettings(nextSettings);
+    showToast(
+      `Imported ${backup.memories.length} memories and ${backup.mcpServers.length} MCP servers`,
+    );
   }
 
   function getConversationMode(conversation: ConversationRecord | undefined | null) {
@@ -667,6 +683,7 @@ function ChatAppInner() {
         onClearMemories={() => void handleClearMemories()}
         onClose={() => setIsSettingsOpen(false)}
         onDeleteMemory={(id) => void handleDeleteMemory(id)}
+        onImportBackup={(backup) => void handleImportSettingsBackup(backup)}
         onRestoreConversation={(conversation) =>
           void handleRestoreArchivedConversation(conversation)
         }

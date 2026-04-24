@@ -96,6 +96,66 @@ test("exports memories and MCP settings without the OpenRouter key", async ({
   ]);
 });
 
+test("imports memories and MCP settings while preserving the OpenRouter key", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  await configureLocalKey(page);
+  await page.getByTestId("header-settings-button").click();
+
+  const backup = {
+    exportedAt: "2026-04-25T00:00:00.000Z",
+    mcpServers: [
+      {
+        enabled: true,
+        headers: {
+          Authorization: "Bearer imported-token",
+        },
+        id: "imported_mcp",
+        name: "Imported MCP",
+        url: "https://imported.example.com/mcp",
+      },
+    ],
+    memories: [
+      {
+        content: "User prefers imported backups.",
+        createdAt: "2026-04-24T00:00:00.000Z",
+        id: "imported_memory",
+        updatedAt: "2026-04-24T00:00:00.000Z",
+      },
+    ],
+    version: 1,
+  };
+
+  await page.getByTestId("import-settings-backup-input").setInputFiles({
+    buffer: Buffer.from(JSON.stringify(backup)),
+    mimeType: "application/json",
+    name: "tl-chat-settings.json",
+  });
+
+  await expect(
+    page.getByText("Imported 1 memories and 1 MCP servers"),
+  ).toBeVisible();
+  await expect(
+    page.getByText("User prefers imported backups.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByPlaceholder("GitHub MCP")).toHaveValue("Imported MCP");
+  await expect(
+    page.getByPlaceholder("https://example.com/mcp"),
+  ).toHaveValue("https://imported.example.com/mcp");
+  await expect(page.getByTestId("api-key-input")).toHaveValue(
+    "sk-or-v1-playwright-local-key",
+  );
+
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await page.getByTestId("header-settings-button").click();
+  await expect(
+    page.getByText("User prefers imported backups.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByPlaceholder("GitHub MCP")).toHaveValue("Imported MCP");
+});
+
 test("renames a thread and keeps it after refresh", async ({ page }) => {
   await page.goto("/");
 
