@@ -1,5 +1,22 @@
 # Progress
 
+## 2026-04-25T01:49:55+08:00
+
+Completed: Added a compact route metadata chip for assistant messages when the route mode is `auto` or `fallback`; manual routes remain hidden to avoid noise.
+
+Verification:
+
+- `npm test`: passed, 10 files and 57 tests.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+
+Screenshots: none captured in this loop. The chip requires an assistant message with route metadata; this loop kept validation to code/build checks rather than fabricating UI state.
+
+Findings:
+
+- Existing UI already had route metadata in message metadata, but it was rendered as low-emphasis text.
+- The chip now gives the route mode a clear label and keeps the route reason truncated with a full `title` tooltip.
+
 ## 2026-04-25T01:47:50+08:00
 
 Completed: Created `PROMPT.md`, `PLAN.md`, `TODO.md`, `PROGRESS.md`, and `screenshots/.gitkeep` so future loops have Markdown control files as the repository source of truth.

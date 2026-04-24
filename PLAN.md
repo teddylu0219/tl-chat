@@ -11,9 +11,9 @@ Status: in progress.
 
 ## Milestone 2: Improve Observability and UX
 
-Status: next.
+Status: in progress.
 
-- Show routing decisions clearly enough for users to trust model selection.
+- Show routing decisions clearly enough for users to trust model selection. Initial route chips are implemented for auto/fallback assistant messages.
 - Make tool execution state, failures, and outputs easier to inspect without overwhelming the chat.
 - Improve settings safety for API keys, MCP headers, and draft cancellation.
 - Record screenshots in `screenshots/` when UI changes are visually validated.

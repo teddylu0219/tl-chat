@@ -124,6 +124,18 @@ function getToolDisplayName(part: UIMessage["parts"][number]) {
   return part.type.replace(/^tool-/, "").replace(/_/g, " ");
 }
 
+function formatRouteModeLabel(routeMode?: string) {
+  if (routeMode === "fallback") {
+    return "Fallback route";
+  }
+
+  if (routeMode === "auto") {
+    return "Auto route";
+  }
+
+  return "Route";
+}
+
 async function requestMemoryOperations({
   apiKey,
   conversation,
@@ -581,9 +593,20 @@ function MessageBubble({
           ) : null}
         </div>
         {routeMetadata?.routeMode && routeMetadata.routeMode !== "manual" ? (
-          <p className="mb-2 px-0.5 text-[12px] text-[color:var(--muted-foreground)]">
-            {routeMetadata.routeReason}
-          </p>
+          <div
+            className="mb-3 inline-flex max-w-full items-center gap-2 rounded-full border border-[color:var(--border)] bg-[color:var(--surface-muted)] px-3 py-1.5 text-[12px] text-[color:var(--muted-foreground)]"
+            title={routeMetadata.routeReason}
+          >
+            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--accent-strong)]">
+              {formatRouteModeLabel(routeMetadata.routeMode)}
+            </span>
+            {routeMetadata.routeReason ? (
+              <>
+                <span className="h-1 w-1 shrink-0 rounded-full bg-[color:var(--border-strong)]" />
+                <span className="truncate">{routeMetadata.routeReason}</span>
+              </>
+            ) : null}
+          </div>
         ) : null}
         <MessageAttachments message={message} />
         {!isUser ? <ToolActivityList message={message} /> : null}

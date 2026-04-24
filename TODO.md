@@ -2,7 +2,6 @@
 
 ## Active
 
-- [ ] Add visible route metadata chips for auto/fallback decisions in assistant messages.
 - [ ] Improve tool activity rendering so MCP failures and structured outputs are easier to scan.
 - [ ] Add a memory review affordance after automatic memory updates.
 - [ ] Add Playwright coverage for settings save/cancel behavior.
@@ -17,3 +16,4 @@
 ## Done
 
 - [x] Create repository control files for autonomous loop tracking.
+- [x] Add visible route metadata chips for auto/fallback decisions in assistant messages.
