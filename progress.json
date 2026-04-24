@@ -213,8 +213,13 @@
       "completedAt": "2026-04-25T03:12:54+08:00",
       "status": "completed",
       "task": "Added a server-side MCP connectivity test route and Settings Test action for unsaved MCP server drafts, fixed duplicate invalid-header feedback exposed by e2e, and ran npm test, npm run lint, npm run build, and npm run test:e2e successfully."
+    },
+    {
+      "completedAt": "2026-04-25T03:28:43+08:00",
+      "status": "completed",
+      "task": "Added shared model capability badges to chat and council model controls plus route metadata chips, extended Playwright coverage for the active model badge path, verified npm test, npm run lint, npm run build, and npm run test:e2e, and promoted four next-stage TODO items."
     }
   ],
-  "nextTask": "Continue from TODO.md with capability badges, conversation backup import/export, or per-model routing diagnostics.",
-  "updatedAt": "2026-04-25T03:12:54+08:00"
+  "nextTask": "Continue from TODO.md with conversation backup import/export, routing diagnostics, prompt templates, search highlighting, memory conflict detection, or MCP tool toggles.",
+  "updatedAt": "2026-04-25T03:28:43+08:00"
 }

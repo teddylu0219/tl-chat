@@ -96,6 +96,15 @@ test("persists custom model capability settings", async ({ page }) => {
   await expect(
     page.getByTestId("custom-model-capability-supportsReasoning"),
   ).not.toBeChecked();
+
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await page.getByTestId("model-select").selectOption("custom/omni-router");
+
+  const activeCapabilities = page.getByTestId("active-model-capabilities");
+  await expect(activeCapabilities).toContainText("Vision");
+  await expect(activeCapabilities).toContainText("Tools");
+  await expect(activeCapabilities).toContainText("Code");
+  await expect(activeCapabilities).not.toContainText("Reasoning");
 });
 
 test("tests MCP server connections from unsaved settings drafts", async ({

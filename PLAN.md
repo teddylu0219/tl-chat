@@ -20,6 +20,7 @@ Status: in progress.
 - Improve settings safety for API keys, MCP headers, and draft cancellation. Settings save/cancel behavior now has Playwright coverage.
 - Let users describe custom OpenRouter model capabilities so manual custom models do not get incorrectly bypassed by image/tool fallback routing.
 - Protect custom model capability settings with e2e coverage for disabled/enabled controls and save/reopen persistence.
+- Surface model capabilities directly in chat and council model controls, including routed assistant metadata chips.
 - Add safer memory review and conflict handling. Automatic memory updates now expose a review action that opens settings.
 - Make multimodal limits understandable before upload. Composer attachment help text now lists limits and supported text-like file families.
 - Record screenshots in `screenshots/` when UI changes are visually validated.
@@ -32,4 +33,5 @@ Status: planned.
 - Add stronger import/export paths for conversations, settings, and memories. A versioned backup schema now covers memories and MCP server settings, and Settings can export/import that backup as JSON.
 - Protect backup import reliability with e2e coverage for malformed JSON and schema-invalid payloads.
 - Add richer model capability visibility and route diagnostics for custom models and Auto Router decisions.
+- Expand daily-driver workflow ergonomics with prompt templates, stronger conversation search, and safer memory conflict handling.
 - Add end-to-end checks for the highest-value user flows.

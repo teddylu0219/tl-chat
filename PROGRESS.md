@@ -1,5 +1,23 @@
 # Progress
 
+## 2026-04-25T03:28:43+08:00
+
+Completed: Added model capability badges to standard chat model controls, route metadata chips, council model selection buttons, council host controls, and selected council model pills. The badges reuse one shared component and expose an accessible capabilities label.
+
+Verification:
+
+- `npm test`: passed, 11 files and 66 tests.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run test:e2e`: passed, 17 tests.
+
+Screenshots: none captured in this loop. The standard chat model picker badge path is covered by Playwright assertions; the remaining badge placements are covered by build and existing e2e council flows.
+
+Findings:
+
+- Native `<select>` options cannot show rich badges reliably, so badges are rendered adjacent to the current selection and inside button-based council pickers.
+- `TODO.md` active items were down to two after this loop, so four next-stage tasks were promoted into Active.
+
 ## 2026-04-25T03:12:54+08:00
 
 Completed: Added a Settings MCP connectivity test action. Each MCP server draft now has a `Test` button that sends the current unsaved name, URL, and headers to a server-side `/api/mcp-test` route, lists tools through the existing MCP client, and shows per-server success or error status without requiring the settings draft to be saved first.

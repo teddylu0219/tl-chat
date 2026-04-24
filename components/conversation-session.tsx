@@ -35,6 +35,7 @@ import {
 import remarkGfm from "remark-gfm";
 
 import { ConversationActionMenu } from "@/components/conversation-action-menu";
+import { ModelCapabilityBadges } from "@/components/model-capability-badges";
 import { useToast } from "@/components/toast";
 import { APP_NAME } from "@/lib/app-config";
 import {
@@ -62,6 +63,7 @@ import {
   getModelOption,
   getModelOptions,
   type ModelCapabilityFlags,
+  type ModelOption,
 } from "@/lib/models";
 import type { McpServerConfig } from "@/lib/mcp";
 import type { ConversationRecord } from "@/lib/persistence";
@@ -621,16 +623,21 @@ function ToolActivityList({ message }: { message: UIMessage }) {
 function MessageBubble({
   message,
   modelLabel,
+  modelOptions,
   onRegenerate,
 }: {
   message: UIMessage;
   modelLabel?: string;
+  modelOptions: ModelOption[];
   onRegenerate?: () => void;
 }) {
   const rawText = getMessageText(message);
   const isUser = message.role === "user";
   const isStreaming = !isUser && isMessageStreaming(message);
   const routeMetadata = getRouteMetadata(message);
+  const routedModel = routeMetadata?.routedModelId
+    ? modelOptions.find((model) => model.id === routeMetadata.routedModelId)
+    : null;
   // Strip <memory> tags from display
   const text = isUser ? rawText : extractMemoriesFromResponse(rawText).cleanText;
 
@@ -673,6 +680,11 @@ function MessageBubble({
             <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--accent-strong)]">
               {formatRouteModeLabel(routeMetadata.routeMode)}
             </span>
+            <ModelCapabilityBadges
+              compact
+              model={routedModel}
+              testId="route-model-capabilities"
+            />
             {routeMetadata.routeReason ? (
               <>
                 <span className="h-1 w-1 shrink-0 rounded-full bg-[color:var(--border-strong)]" />
@@ -1152,6 +1164,12 @@ export function ConversationSession({
               ))}
             </select>
           </label>
+          <ModelCapabilityBadges
+            compact
+            className="hidden max-w-[360px] sm:flex"
+            model={currentModel}
+            testId="active-model-capabilities"
+          />
 
           {isStreaming ? (
             <button
@@ -1209,6 +1227,7 @@ export function ConversationSession({
               <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-[color:var(--border)] bg-[color:var(--surface-strong)] px-3.5 py-1.5 text-[13px] text-[color:var(--foreground)]">
                 <Sparkles className="h-4 w-4 text-[color:var(--accent-strong)]" />
                 {currentModel.label}
+                <ModelCapabilityBadges compact model={currentModel} />
               </div>
 
               <div className="mt-8 grid gap-3 text-left sm:grid-cols-3">
@@ -1252,6 +1271,7 @@ export function ConversationSession({
                   key={message.id}
                   message={message}
                   modelLabel={message.role === "assistant" ? currentModel.label : undefined}
+                  modelOptions={modelOptions}
                   onRegenerate={isLastAssistant ? () => void handleRegenerate() : undefined}
                 />
               );

@@ -15,6 +15,7 @@ import { memo, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { ModelCapabilityBadges } from "@/components/model-capability-badges";
 import { useToast } from "@/components/toast";
 import { APP_NAME } from "@/lib/app-config";
 import {
@@ -808,6 +809,7 @@ export function CouncilSession({
                   </option>
                 ))}
               </select>
+              <ModelCapabilityBadges compact model={hostModel} />
             </label>
           ) : null}
           {isRunning ? (
@@ -861,7 +863,7 @@ export function CouncilSession({
                     return (
                       <button
                         key={model.id}
-                        className={`rounded-full border px-4 py-2 text-[13px] transition ${
+                        className={`rounded-[22px] border px-4 py-2 text-[13px] transition ${
                           isSelected
                             ? "border-[color:var(--accent-strong)] bg-[color:var(--accent-strong)] text-white"
                             : "border-[color:var(--border)] bg-[color:var(--surface-strong)] text-[color:var(--foreground)] hover:border-[color:var(--border-strong)]"
@@ -869,14 +871,22 @@ export function CouncilSession({
                         type="button"
                         onClick={() => toggleModel(model.id)}
                       >
-                        {isSelected && colorIndex >= 0 ? (
-                          <span
-                            className="mr-1.5 inline-block h-2 w-2 rounded-full"
-                            style={{ backgroundColor: getModelColor(colorIndex) }}
-                          />
-                        ) : null}
-                        {model.label}
-                        {isHost ? " · Host" : ""}
+                        <span className="inline-flex items-center gap-1.5">
+                          {isSelected && colorIndex >= 0 ? (
+                            <span
+                              className="inline-block h-2 w-2 rounded-full"
+                              style={{ backgroundColor: getModelColor(colorIndex) }}
+                            />
+                          ) : null}
+                          {model.label}
+                          {isHost ? " · Host" : ""}
+                        </span>
+                        <ModelCapabilityBadges
+                          compact
+                          className="mt-1 justify-center"
+                          model={model}
+                          tone={isSelected ? "inverse" : "default"}
+                        />
                       </button>
                     );
                   })}
@@ -900,6 +910,7 @@ export function CouncilSession({
                       </option>
                     ))}
                   </select>
+                  <ModelCapabilityBadges compact model={hostModel} />
                 </label>
               ) : null}
             </div>
@@ -925,6 +936,7 @@ export function CouncilSession({
                       style={{ backgroundColor: getModelColor(index) }}
                     />
                     {model?.label ?? modelId}
+                    <ModelCapabilityBadges compact model={model} />
                     {isHost ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--surface-strong)] px-1.5 py-0.5 text-[10px] uppercase tracking-[0.18em]">
                         <Crown className="h-2.5 w-2.5" />
