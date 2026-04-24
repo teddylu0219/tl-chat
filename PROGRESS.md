@@ -1,5 +1,23 @@
 # Progress
 
+## 2026-04-25T02:44:44+08:00
+
+Completed: Added Playwright coverage for invalid Settings backup imports. The new e2e test uploads malformed JSON and schema-invalid JSON, verifies the inline Settings error appears, and confirms the existing OpenRouter key plus memory/MCP state are not changed.
+
+Verification:
+
+- `npm test`: passed, 11 files and 65 tests.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run test:e2e`: passed, 15 tests.
+
+Screenshots: none captured in this loop. The invalid import behavior is directly covered by browser assertions.
+
+Findings:
+
+- The import error path was already handled in UI, but only successful imports were covered by Playwright.
+- The test avoids matching browser-specific JSON parse wording and instead asserts the Settings error region is visible and local settings remain unchanged.
+
 ## 2026-04-25T02:29:59+08:00
 
 Completed: Added custom OpenRouter model capability flags. Settings now lets users mark a custom model as Vision, Tools + MCP, Reasoning, and Code capable; those flags flow through local settings, chat request validation, model option metadata, Auto Router candidate selection, fallback routing, and tool gating.

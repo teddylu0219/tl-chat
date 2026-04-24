@@ -28,5 +28,6 @@ Status: planned.
 
 - Add richer tool routing and tool result summarization.
 - Add stronger import/export paths for conversations, settings, and memories. A versioned backup schema now covers memories and MCP server settings, and Settings can export/import that backup as JSON.
+- Protect backup import reliability with e2e coverage for malformed JSON and schema-invalid payloads.
 - Add richer model capability visibility and route diagnostics for custom models and Auto Router decisions.
 - Add end-to-end checks for the highest-value user flows.

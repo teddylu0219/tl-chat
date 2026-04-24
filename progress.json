@@ -192,8 +192,13 @@
       "completedAt": "2026-04-25T02:29:59+08:00",
       "status": "completed",
       "task": "Added custom OpenRouter model capability flags in Settings, wired them through chat request validation, Auto Router candidate selection, fallback routing, and tool gating, then ran npm test, npm run lint, npm run build, and npm run test:e2e successfully."
+    },
+    {
+      "completedAt": "2026-04-25T02:44:44+08:00",
+      "status": "completed",
+      "task": "Added Playwright coverage for malformed JSON and schema-invalid Settings backup imports, verified rejected imports leave local settings unchanged, and ran npm test, npm run lint, npm run build, and npm run test:e2e successfully."
     }
   ],
-  "nextTask": "Continue from TODO.md with invalid backup import e2e coverage or MCP server connectivity testing.",
-  "updatedAt": "2026-04-25T02:29:59+08:00"
+  "nextTask": "Continue from TODO.md with MCP server connectivity testing or custom model capability persistence coverage.",
+  "updatedAt": "2026-04-25T02:44:44+08:00"
 }

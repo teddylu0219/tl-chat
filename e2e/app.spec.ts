@@ -156,6 +156,68 @@ test("imports memories and MCP settings while preserving the OpenRouter key", as
   await expect(page.getByPlaceholder("GitHub MCP")).toHaveValue("Imported MCP");
 });
 
+test("rejects invalid settings backup imports without changing local settings", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  await configureLocalKey(page);
+  await page.getByTestId("header-settings-button").click();
+
+  const settingsPanel = page.getByTestId("settings-panel");
+  const settingsError = settingsPanel.locator('[aria-live="polite"]');
+
+  await page.getByTestId("import-settings-backup-input").setInputFiles({
+    buffer: Buffer.from("{bad-json"),
+    mimeType: "application/json",
+    name: "broken-settings.json",
+  });
+
+  await expect(settingsError).toBeVisible();
+  await expect(page.getByTestId("api-key-input")).toHaveValue(
+    "sk-or-v1-playwright-local-key",
+  );
+
+  const invalidBackup = {
+    exportedAt: "not-a-date",
+    mcpServers: [
+      {
+        enabled: true,
+        headers: {},
+        id: "rejected_mcp",
+        name: "Rejected MCP",
+        url: "https://rejected.example.com/mcp",
+      },
+    ],
+    memories: [
+      {
+        content: "Should not import this invalid backup.",
+        createdAt: "2026-04-24T00:00:00.000Z",
+        id: "rejected_memory",
+        updatedAt: "2026-04-24T00:00:00.000Z",
+      },
+    ],
+    version: 999,
+  };
+
+  await page.getByTestId("import-settings-backup-input").setInputFiles({
+    buffer: Buffer.from(JSON.stringify(invalidBackup)),
+    mimeType: "application/json",
+    name: "invalid-settings.json",
+  });
+
+  await expect(settingsError).toContainText("Invalid");
+  await expect(page.getByTestId("api-key-input")).toHaveValue(
+    "sk-or-v1-playwright-local-key",
+  );
+  await expect(
+    settingsPanel.getByText("Should not import this invalid backup.", {
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect(settingsPanel.getByText("Rejected MCP")).toHaveCount(0);
+});
+
 test("renames a thread and keeps it after refresh", async ({ page }) => {
   await page.goto("/");
 
