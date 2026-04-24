@@ -26,5 +26,5 @@ Status: in progress.
 Status: planned.
 
 - Add richer tool routing and tool result summarization.
-- Add stronger import/export paths for conversations, settings, and memories.
+- Add stronger import/export paths for conversations, settings, and memories. A versioned backup schema now covers memories and MCP server settings.
 - Add end-to-end checks for the highest-value user flows.

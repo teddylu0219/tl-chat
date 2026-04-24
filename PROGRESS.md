@@ -1,5 +1,23 @@
 # Progress
 
+## 2026-04-25T02:00:18+08:00
+
+Completed: Added versioned backup schema helpers for memories and MCP server settings. The helper can create and parse backup payloads, defaults missing collections, and rejects invalid dates or invalid MCP server URLs.
+
+Verification:
+
+- `npm test -- lib/settings-backup.test.ts`: passed, 3 tests.
+- `npm test`: passed, 11 files and 61 tests.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+
+Screenshots: none captured in this loop. This was non-UI validation logic.
+
+Findings:
+
+- The export/import TODO was too broad for one loop, so it is now split into export UI and import UI tasks.
+- Backup payloads intentionally cover memories and MCP server settings only; OpenRouter API keys are not part of this backup helper.
+
 ## 2026-04-25T01:58:51+08:00
 
 Completed: Added MCP discovery timeout and partial failure summaries. Healthy MCP servers still register tools while failed servers produce a warning that is included in the system prompt for relevant user requests.
