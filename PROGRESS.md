@@ -1,5 +1,24 @@
 # Progress
 
+## 2026-04-25T02:29:59+08:00
+
+Completed: Added custom OpenRouter model capability flags. Settings now lets users mark a custom model as Vision, Tools + MCP, Reasoning, and Code capable; those flags flow through local settings, chat request validation, model option metadata, Auto Router candidate selection, fallback routing, and tool gating.
+
+Verification:
+
+- `npm test`: passed, 11 files and 65 tests.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run test:e2e`: passed, 14 tests.
+
+Screenshots: none captured in this loop. The routing behavior is covered by unit tests, and the Settings UI change passed build plus the existing browser regression suite.
+
+Findings:
+
+- Custom models previously had no way to declare image or tool support, so manual custom selections could be forced into fallback routes even when the model actually supported the task.
+- The chat API now accepts `customModelCapabilities` with a strict boolean-only shape and uses it for custom Auto Router candidates, route decisions, and tool availability.
+- `TODO.md` active items were down to two after this loop, so four next-stage tasks were promoted into Active.
+
 ## 2026-04-25T02:18:36+08:00
 
 Completed: Added Settings UI import action for memories and MCP server settings. Importing a valid backup replaces memories and MCP servers, preserves the OpenRouter API key, updates the open Settings draft, persists imported data to IndexedDB, and shows an import toast.

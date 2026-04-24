@@ -4,8 +4,16 @@ import { z } from "zod";
 import { mcpServerConfigSchema } from "./mcp";
 import { DEFAULT_MODEL_ID } from "./models";
 
+const customModelCapabilitiesSchema = z.object({
+  supportsCode: z.boolean().optional(),
+  supportsImages: z.boolean().optional(),
+  supportsReasoning: z.boolean().optional(),
+  supportsTools: z.boolean().optional(),
+});
+
 export const chatRequestSchema = z.object({
   apiKey: z.string().trim().min(12, "OpenRouter API key is required."),
+  customModelCapabilities: customModelCapabilitiesSchema.default({}),
   customModelId: z.string().trim().optional(),
   mcpServers: z.array(mcpServerConfigSchema).default([]),
   memories: z

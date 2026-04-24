@@ -43,11 +43,17 @@ import {
   isDuplicateMemory,
   type MemoryEntry,
 } from "@/lib/memory";
-import { FEATURED_MODELS, getModelOptions, type ModelOption } from "@/lib/models";
+import {
+  FEATURED_MODELS,
+  getModelOptions,
+  type ModelCapabilityFlags,
+  type ModelOption,
+} from "@/lib/models";
 import type { ConversationRecord } from "@/lib/persistence";
 
 type CouncilSessionProps = {
   conversation: ConversationRecord;
+  customModelCapabilities: ModelCapabilityFlags;
   customModelId: string;
   memories: MemoryEntry[];
   onAutoMemory?: (entry: MemoryEntry) => void;
@@ -271,6 +277,7 @@ const CouncilBubble = memo(function CouncilBubble({
 
 export function CouncilSession({
   conversation,
+  customModelCapabilities,
   customModelId,
   memories,
   onAutoMemory,
@@ -323,7 +330,7 @@ export function CouncilSession({
   const messageContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const modelOptions = getModelOptions(customModelId);
+  const modelOptions = getModelOptions(customModelId, customModelCapabilities);
   const normalizedHostModelId = normalizeHostModelId(selectedModelIds, hostModelId);
   const selectedModels = selectedModelIds
     .map((modelId) => modelOptions.find((model) => model.id === modelId))

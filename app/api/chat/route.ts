@@ -254,12 +254,17 @@ export async function POST(request: Request) {
     const activeMcpServers = getActiveMcpServers(body.mcpServers);
     const route = resolveModelRoute({
       availableToolCount: 4 + activeMcpServers.length,
+      customModelCapabilities: body.customModelCapabilities,
       customModelId: body.customModelId,
       messages: body.messages,
       requestedModelId: body.modelId,
     });
     const provider = createOpenRouterProvider(body.apiKey, request.url);
-    const canUseTools = modelSupportsTools(route.modelId, body.customModelId);
+    const canUseTools = modelSupportsTools(
+      route.modelId,
+      body.customModelId,
+      body.customModelCapabilities,
+    );
 
     if (process.env.OPENROUTER_MOCK_RESPONSE === "1") {
       return buildMockResponse(route.modelId, getLastMessageText(body.messages));
@@ -330,7 +335,11 @@ export async function POST(request: Request) {
           routeReason: route.reason,
           routedModelId: route.modelId,
           routedModelLabel:
-            getModelOption(route.modelId, body.customModelId)?.label ?? route.label,
+            getModelOption(
+              route.modelId,
+              body.customModelId,
+              body.customModelCapabilities,
+            )?.label ?? route.label,
         };
       },
     });

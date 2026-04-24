@@ -6,7 +6,7 @@ import type { CouncilMessageMeta } from "./council";
 import { getPreviewText, sortConversations } from "./conversations";
 import type { McpServerConfig } from "./mcp";
 import type { MemoryEntry } from "./memory";
-import { DEFAULT_MODEL_ID } from "./models";
+import { DEFAULT_MODEL_ID, type ModelCapabilityFlags } from "./models";
 
 const DATABASE_NAME = "own-ai-chat";
 const DATABASE_VERSION = 3;
@@ -32,6 +32,7 @@ export type ConversationRecord = {
 
 export type LocalSettings = {
   activeConversationId: string | null;
+  customModelCapabilities: ModelCapabilityFlags;
   customModelId: string;
   defaultModelId: string;
   mcpServers: McpServerConfig[];
@@ -57,6 +58,7 @@ type OwnAiChatSchema = DBSchema & {
 
 export const DEFAULT_SETTINGS: LocalSettings = {
   activeConversationId: null,
+  customModelCapabilities: {},
   customModelId: "",
   defaultModelId: DEFAULT_MODEL_ID,
   mcpServers: [],

@@ -20,7 +20,7 @@ import { formatConversationTimestamp, getDisplayTitle } from "@/lib/conversation
 import { createMcpServerConfig } from "@/lib/mcp";
 import type { MemoryEntry } from "@/lib/memory";
 import { THEME_OPTIONS } from "@/lib/app-config";
-import { getModelOptions } from "@/lib/models";
+import { getModelOptions, type ModelCapabilityFlags } from "@/lib/models";
 import type { ConversationRecord, LocalSettings } from "@/lib/persistence";
 import {
   createSettingsBackup,
@@ -82,6 +82,33 @@ type SettingsPanelProps = {
   settings: LocalSettings;
 };
 
+const CUSTOM_MODEL_CAPABILITY_OPTIONS = [
+  {
+    description: "Allows image attachments to stay on this custom model.",
+    key: "supportsImages",
+    label: "Vision",
+  },
+  {
+    description: "Allows memory, built-in tools, and MCP tools on this model.",
+    key: "supportsTools",
+    label: "Tools + MCP",
+  },
+  {
+    description: "Marks it eligible for heavier analysis and planning work.",
+    key: "supportsReasoning",
+    label: "Reasoning",
+  },
+  {
+    description: "Marks it eligible for coding and debugging tasks.",
+    key: "supportsCode",
+    label: "Code",
+  },
+] satisfies Array<{
+  description: string;
+  key: keyof ModelCapabilityFlags;
+  label: string;
+}>;
+
 export function SettingsPanel(props: SettingsPanelProps) {
   if (!props.isOpen) {
     return null;
@@ -111,7 +138,11 @@ function SettingsPanelContent({
     () => createHeaderDrafts(settings.mcpServers),
   );
 
-  const modelOptions = getModelOptions(draftSettings.customModelId);
+  const hasCustomModelId = draftSettings.customModelId.trim().length > 0;
+  const modelOptions = getModelOptions(
+    draftSettings.customModelId,
+    draftSettings.customModelCapabilities,
+  );
 
   function updateMcpServer(
     serverId: string,
@@ -322,14 +353,18 @@ function SettingsPanelContent({
             </label>
           </section>
 
-          <label className="block rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface-strong)] p-5">
-            <span className="text-sm font-semibold text-[color:var(--foreground)]">
+          <section className="rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface-strong)] p-5">
+            <label
+              className="block text-sm font-semibold text-[color:var(--foreground)]"
+              htmlFor="custom-model-id-input"
+            >
               Custom model id
-            </span>
-            <span className="mt-1 block text-sm text-[color:var(--muted-foreground)]">
+            </label>
+            <p className="mt-1 text-sm text-[color:var(--muted-foreground)]">
               Optional advanced override for any OpenRouter model id.
-            </span>
+            </p>
             <input
+              id="custom-model-id-input"
               className="mt-4 w-full rounded-2xl border border-[color:var(--border)] bg-transparent px-4 py-3 text-sm text-[color:var(--foreground)] outline-none placeholder:text-[color:var(--muted-foreground)]"
               placeholder="anthropic/claude-sonnet-4.6"
               value={draftSettings.customModelId}
@@ -340,7 +375,41 @@ function SettingsPanelContent({
                 }))
               }
             />
-          </label>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {CUSTOM_MODEL_CAPABILITY_OPTIONS.map((option) => (
+                <label
+                  key={option.key}
+                  className={`rounded-[18px] border border-[color:var(--border)] bg-[color:var(--surface-muted)] px-4 py-3 transition ${
+                    hasCustomModelId ? "" : "opacity-55"
+                  }`}
+                >
+                  <span className="flex items-center gap-2 text-sm font-medium text-[color:var(--foreground)]">
+                    <input
+                      checked={Boolean(
+                        draftSettings.customModelCapabilities[option.key],
+                      )}
+                      data-testid={`custom-model-capability-${option.key}`}
+                      disabled={!hasCustomModelId}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setDraftSettings((currentSettings) => ({
+                          ...currentSettings,
+                          customModelCapabilities: {
+                            ...currentSettings.customModelCapabilities,
+                            [option.key]: event.target.checked,
+                          },
+                        }))
+                      }
+                    />
+                    {option.label}
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-[color:var(--muted-foreground)]">
+                    {option.description}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </section>
 
           <section className="rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface-strong)] p-5">
             <div className="flex items-start justify-between gap-3">

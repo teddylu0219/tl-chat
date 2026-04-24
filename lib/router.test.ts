@@ -126,4 +126,47 @@ describe("model router", () => {
     expect(route.mode).toBe("fallback");
     expect(route.modelId).toBe("openai/gpt-5.4");
   });
+
+  it("keeps custom models selected when their capability flags match the task", () => {
+    const route = resolveModelRoute({
+      availableToolCount: 2,
+      customModelCapabilities: {
+        supportsImages: true,
+        supportsTools: true,
+      },
+      customModelId: "custom/omni-router",
+      messages: [
+        createUserMessage("Use MCP and describe this image.", [
+          {
+            filename: "diagram.png",
+            mediaType: "image/png",
+            type: "file",
+            url: "data:image/png;base64,abc",
+          },
+          { type: "text", text: "Use MCP and describe this image." },
+        ]),
+      ],
+      requestedModelId: "custom/omni-router",
+    });
+
+    expect(route.mode).toBe("manual");
+    expect(route.modelId).toBe("custom/omni-router");
+  });
+
+  it("routes auto mode to custom models when capability flags fit", () => {
+    const route = resolveModelRoute({
+      customModelCapabilities: {
+        supportsCode: true,
+      },
+      customModelId: "custom/code-specialist",
+      messages: [
+        createUserMessage("Help me debug this TypeScript component error."),
+      ],
+      requestedModelId: AUTO_MODEL_ID,
+    });
+
+    expect(route.mode).toBe("auto");
+    expect(route.modelId).toBe("custom/code-specialist");
+    expect(route.reason).toContain("Custom model");
+  });
 });

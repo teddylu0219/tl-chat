@@ -1,12 +1,15 @@
-export type ModelOption = {
+export type ModelCapabilityFlags = {
+  supportsCode?: boolean;
+  supportsImages?: boolean;
+  supportsReasoning?: boolean;
+  supportsTools?: boolean;
+};
+
+export type ModelOption = ModelCapabilityFlags & {
   blurb: string;
   id: string;
   label: string;
   provider: string;
-  supportsImages?: boolean;
-  supportsTools?: boolean;
-  supportsReasoning?: boolean;
-  supportsCode?: boolean;
 };
 
 export const AUTO_MODEL_ID = "auto/router";
@@ -109,7 +112,10 @@ export function isSupportedModel(modelId: string) {
   return Boolean(getKnownModel(modelId));
 }
 
-export function getModelOptions(customModelId?: string) {
+export function getModelOptions(
+  customModelId?: string,
+  customModelCapabilities: ModelCapabilityFlags = {},
+) {
   const trimmedCustomModelId = customModelId?.trim();
 
   if (!trimmedCustomModelId || isSupportedModel(trimmedCustomModelId)) {
@@ -123,20 +129,41 @@ export function getModelOptions(customModelId?: string) {
       label: "Custom OpenRouter model",
       provider: "Custom",
       blurb: trimmedCustomModelId,
+      ...customModelCapabilities,
     },
   ];
 }
 
-export function getModelOption(modelId: string, customModelId?: string) {
-  return getModelOptions(customModelId).find((model) => model.id === modelId);
+export function getModelOption(
+  modelId: string,
+  customModelId?: string,
+  customModelCapabilities: ModelCapabilityFlags = {},
+) {
+  return getModelOptions(customModelId, customModelCapabilities).find(
+    (model) => model.id === modelId,
+  );
 }
 
-export function modelSupportsImages(modelId: string, customModelId?: string) {
-  return Boolean(getModelOption(modelId, customModelId)?.supportsImages);
+export function modelSupportsImages(
+  modelId: string,
+  customModelId?: string,
+  customModelCapabilities: ModelCapabilityFlags = {},
+) {
+  return Boolean(
+    getModelOption(modelId, customModelId, customModelCapabilities)
+      ?.supportsImages,
+  );
 }
 
-export function modelSupportsTools(modelId: string, customModelId?: string) {
-  return Boolean(getModelOption(modelId, customModelId)?.supportsTools);
+export function modelSupportsTools(
+  modelId: string,
+  customModelId?: string,
+  customModelCapabilities: ModelCapabilityFlags = {},
+) {
+  return Boolean(
+    getModelOption(modelId, customModelId, customModelCapabilities)
+      ?.supportsTools,
+  );
 }
 
 export function getMemoryManagerModelId(modelId: string) {

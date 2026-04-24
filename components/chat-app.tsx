@@ -594,6 +594,7 @@ function ChatAppInner() {
               <CouncilSession
                 key={activeConversation.id}
                 conversation={activeConversation}
+                customModelCapabilities={settings.customModelCapabilities}
                 customModelId={settings.customModelId}
                 memories={memories}
                 openRouterApiKey={settings.openRouterApiKey}
@@ -606,6 +607,7 @@ function ChatAppInner() {
               <ConversationSession
                 key={activeConversation.id}
                 conversation={activeConversation}
+                customModelCapabilities={settings.customModelCapabilities}
                 customModelId={settings.customModelId}
                 memories={memories}
                 mcpServers={settings.mcpServers}

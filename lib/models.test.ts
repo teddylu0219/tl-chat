@@ -7,6 +7,8 @@ import {
   getModelOption,
   getModelOptions,
   isSupportedModel,
+  modelSupportsImages,
+  modelSupportsTools,
 } from "./models";
 
 describe("model registry", () => {
@@ -37,6 +39,29 @@ describe("model registry", () => {
     });
     expect(getModelOption("meta-llama/llama-custom", "meta-llama/llama-custom"))
       .toBeTruthy();
+  });
+
+  it("applies custom model capability flags", () => {
+    const options = getModelOptions("meta-llama/llama-custom", {
+      supportsImages: true,
+      supportsTools: true,
+    });
+
+    expect(options.at(-1)).toMatchObject({
+      id: "meta-llama/llama-custom",
+      supportsImages: true,
+      supportsTools: true,
+    });
+    expect(
+      modelSupportsImages("meta-llama/llama-custom", "meta-llama/llama-custom", {
+        supportsImages: true,
+      }),
+    ).toBe(true);
+    expect(
+      modelSupportsTools("meta-llama/llama-custom", "meta-llama/llama-custom", {
+        supportsTools: true,
+      }),
+    ).toBe(true);
   });
 
   it("resolves Auto Router to a concrete memory manager model", () => {

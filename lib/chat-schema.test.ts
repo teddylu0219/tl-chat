@@ -174,4 +174,31 @@ describe("chat request schema", () => {
       ],
     });
   });
+
+  it("accepts custom model capability flags", async () => {
+    await expect(
+      parseChatRequest({
+        apiKey: "sk-or-v1-example-key",
+        customModelCapabilities: {
+          supportsImages: true,
+          supportsTools: true,
+        },
+        customModelId: "custom/omni-router",
+        messages: [
+          {
+            id: "msg_1",
+            parts: [{ type: "text", text: "Hello" }],
+            role: "user",
+          },
+        ],
+        modelId: "custom/omni-router",
+      }),
+    ).resolves.toMatchObject({
+      customModelCapabilities: {
+        supportsImages: true,
+        supportsTools: true,
+      },
+      customModelId: "custom/omni-router",
+    });
+  });
 });

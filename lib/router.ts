@@ -7,6 +7,8 @@ import {
   getModelOption,
   modelSupportsImages,
   modelSupportsTools,
+  type ModelCapabilityFlags,
+  type ModelOption,
 } from "./models";
 
 export type RouteDecision = {
@@ -120,13 +122,76 @@ function pickAutoModel({
   };
 }
 
+function pickCustomAutoModel({
+  customModel,
+  hasImages,
+  needsCode,
+  needsDeepReasoning,
+  needsTools,
+}: {
+  customModel?: ModelOption;
+  hasImages: boolean;
+  needsCode: boolean;
+  needsDeepReasoning: boolean;
+  needsTools: boolean;
+}) {
+  if (!customModel || customModel.id === AUTO_MODEL_ID) {
+    return null;
+  }
+
+  if (hasImages) {
+    if (
+      !customModel.supportsImages ||
+      (needsDeepReasoning && !customModel.supportsReasoning) ||
+      (needsTools && !customModel.supportsTools)
+    ) {
+      return null;
+    }
+
+    return {
+      modelId: customModel.id,
+      reason: needsDeepReasoning
+        ? "Custom model marked vision and reasoning capable."
+        : "Custom model marked vision-capable.",
+    };
+  }
+
+  if (needsCode && customModel.supportsCode) {
+    if (needsTools && !customModel.supportsTools) {
+      return null;
+    }
+
+    return {
+      modelId: customModel.id,
+      reason: "Custom model marked code-capable.",
+    };
+  }
+
+  if (
+    (needsDeepReasoning || needsTools) &&
+    (!needsDeepReasoning || customModel.supportsReasoning) &&
+    (!needsTools || customModel.supportsTools)
+  ) {
+    return {
+      modelId: customModel.id,
+      reason: needsTools
+        ? "Custom model marked tool-capable."
+        : "Custom model marked reasoning-capable.",
+    };
+  }
+
+  return null;
+}
+
 export function resolveModelRoute({
   availableToolCount = 0,
+  customModelCapabilities,
   customModelId,
   messages,
   requestedModelId,
 }: {
   availableToolCount?: number;
+  customModelCapabilities?: ModelCapabilityFlags;
   customModelId?: string;
   messages: UIMessage[];
   requestedModelId: string;
@@ -139,16 +204,40 @@ export function resolveModelRoute({
   const needsDeepReasoning =
     looksLikeDeepReasoningTask(latestText) || textAttachmentLength > 6_000;
   const needsTools = availableToolCount > 0 && looksLikeToolTask(latestText);
-  const requestedModel = getModelOption(requestedModelId, customModelId);
+  const requestedModel = getModelOption(
+    requestedModelId,
+    customModelId,
+    customModelCapabilities,
+  );
+  const trimmedCustomModelId = customModelId?.trim();
+  const customModel = trimmedCustomModelId
+    ? getModelOption(
+        trimmedCustomModelId,
+        customModelId,
+        customModelCapabilities,
+      )
+    : undefined;
 
   if (requestedModelId === AUTO_MODEL_ID || !requestedModel) {
-    const resolved = pickAutoModel({
-      hasImages,
-      needsCode,
-      needsDeepReasoning,
-      needsTools,
-    });
-    const option = getModelOption(resolved.modelId, customModelId);
+    const resolved =
+      pickCustomAutoModel({
+        customModel,
+        hasImages,
+        needsCode,
+        needsDeepReasoning,
+        needsTools,
+      }) ??
+      pickAutoModel({
+        hasImages,
+        needsCode,
+        needsDeepReasoning,
+        needsTools,
+      });
+    const option = getModelOption(
+      resolved.modelId,
+      customModelId,
+      customModelCapabilities,
+    );
 
     return {
       label: option?.label ?? resolved.modelId,
@@ -158,7 +247,14 @@ export function resolveModelRoute({
     };
   }
 
-  if (hasImages && !modelSupportsImages(requestedModelId, customModelId)) {
+  if (
+    hasImages &&
+    !modelSupportsImages(
+      requestedModelId,
+      customModelId,
+      customModelCapabilities,
+    )
+  ) {
     const fallbackModelId = needsDeepReasoning
       ? "google/gemini-2.5-pro"
       : "google/gemini-2.5-flash";
@@ -173,7 +269,11 @@ export function resolveModelRoute({
 
   if (
     needsTools &&
-    !modelSupportsTools(requestedModelId, customModelId)
+    !modelSupportsTools(
+      requestedModelId,
+      customModelId,
+      customModelCapabilities,
+    )
   ) {
     return {
       label: getModelOption("openai/gpt-5.4")?.label ?? "openai/gpt-5.4",

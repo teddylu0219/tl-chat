@@ -187,8 +187,13 @@
       "completedAt": "2026-04-25T02:18:36+08:00",
       "status": "completed",
       "task": "Added Settings UI import action for memories and MCP server settings, preserved OpenRouter keys during import, covered it with Playwright, resolved a Playwright locator error, reran build/e2e with approved font-fetch access, and promoted three next-stage TODO items."
+    },
+    {
+      "completedAt": "2026-04-25T02:29:59+08:00",
+      "status": "completed",
+      "task": "Added custom OpenRouter model capability flags in Settings, wired them through chat request validation, Auto Router candidate selection, fallback routing, and tool gating, then ran npm test, npm run lint, npm run build, and npm run test:e2e successfully."
     }
   ],
-  "nextTask": "Continue from TODO.md with custom model capability flags in Settings.",
-  "updatedAt": "2026-04-25T02:18:36+08:00"
+  "nextTask": "Continue from TODO.md with invalid backup import e2e coverage or MCP server connectivity testing.",
+  "updatedAt": "2026-04-25T02:29:59+08:00"
 }

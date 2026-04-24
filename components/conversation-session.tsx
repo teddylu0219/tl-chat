@@ -58,13 +58,18 @@ import {
   type MemoryOperation,
   type MemoryEntry,
 } from "@/lib/memory";
-import { getModelOption, getModelOptions } from "@/lib/models";
+import {
+  getModelOption,
+  getModelOptions,
+  type ModelCapabilityFlags,
+} from "@/lib/models";
 import type { McpServerConfig } from "@/lib/mcp";
 import type { ConversationRecord } from "@/lib/persistence";
 import { useSpeechRecognition } from "@/lib/use-speech-recognition";
 
 type ConversationSessionProps = {
   conversation: ConversationRecord;
+  customModelCapabilities: ModelCapabilityFlags;
   customModelId: string;
   memories: MemoryEntry[];
   mcpServers: McpServerConfig[];
@@ -708,6 +713,7 @@ function MessageBubble({
 
 export function ConversationSession({
   conversation,
+  customModelCapabilities,
   customModelId,
   memories,
   mcpServers,
@@ -922,9 +928,9 @@ export function ConversationSession({
       });
   }, [memories, messages, modelId, onApplyMemoryOperations, openRouterApiKey, status]);
 
-  const modelOptions = getModelOptions(customModelId);
+  const modelOptions = getModelOptions(customModelId, customModelCapabilities);
   const currentModel =
-    getModelOption(modelId, customModelId) ??
+    getModelOption(modelId, customModelId, customModelCapabilities) ??
     modelOptions[0];
   const activeError = gateError ?? error?.message ?? (speechError || null);
   const isStreaming = status === "streaming" || status === "submitted";
@@ -998,6 +1004,7 @@ export function ConversationSession({
         {
           body: {
             apiKey: openRouterApiKey.trim(),
+            customModelCapabilities,
             customModelId: customModelId || undefined,
             mcpServers,
             memories: memories.map((memory) => ({
@@ -1026,6 +1033,7 @@ export function ConversationSession({
     await regenerate({
       body: {
         apiKey: openRouterApiKey.trim(),
+        customModelCapabilities,
         customModelId: customModelId || undefined,
         mcpServers,
         memories: memories.map((memory) => ({
@@ -1062,6 +1070,7 @@ export function ConversationSession({
         {
           body: {
             apiKey: openRouterApiKey.trim(),
+            customModelCapabilities,
             customModelId: customModelId || undefined,
             mcpServers,
             memories: memories.map((memory) => ({
@@ -1079,6 +1088,7 @@ export function ConversationSession({
     await regenerate({
       body: {
         apiKey: openRouterApiKey.trim(),
+        customModelCapabilities,
         customModelId: customModelId || undefined,
         mcpServers,
         memories: memories.map((memory) => ({

@@ -17,6 +17,7 @@ Status: in progress.
 - Make tool execution state, failures, and outputs easier to inspect without overwhelming the chat. Initial status badges and MCP output formatting are implemented.
 - Make MCP discovery failures visible to the model instead of silently dropping unavailable servers. Discovery now has timeout handling and partial failure summaries.
 - Improve settings safety for API keys, MCP headers, and draft cancellation. Settings save/cancel behavior now has Playwright coverage.
+- Let users describe custom OpenRouter model capabilities so manual custom models do not get incorrectly bypassed by image/tool fallback routing.
 - Add safer memory review and conflict handling. Automatic memory updates now expose a review action that opens settings.
 - Make multimodal limits understandable before upload. Composer attachment help text now lists limits and supported text-like file families.
 - Record screenshots in `screenshots/` when UI changes are visually validated.
@@ -27,4 +28,5 @@ Status: planned.
 
 - Add richer tool routing and tool result summarization.
 - Add stronger import/export paths for conversations, settings, and memories. A versioned backup schema now covers memories and MCP server settings, and Settings can export/import that backup as JSON.
+- Add richer model capability visibility and route diagnostics for custom models and Auto Router decisions.
 - Add end-to-end checks for the highest-value user flows.
