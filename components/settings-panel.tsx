@@ -2,6 +2,7 @@
 
 import {
   Cable,
+  Download,
   Eye,
   EyeOff,
   KeyRound,
@@ -20,6 +21,7 @@ import type { MemoryEntry } from "@/lib/memory";
 import { THEME_OPTIONS } from "@/lib/app-config";
 import { getModelOptions } from "@/lib/models";
 import type { ConversationRecord, LocalSettings } from "@/lib/persistence";
+import { createSettingsBackup } from "@/lib/settings-backup";
 
 function createHeaderDrafts(servers: LocalSettings["mcpServers"]) {
   return Object.fromEntries(
@@ -129,6 +131,32 @@ function SettingsPanelContent({
         error instanceof Error
           ? error.message
           : "MCP headers must be valid JSON.",
+      );
+    }
+  }
+
+  function handleExportBackup() {
+    try {
+      const backup = createSettingsBackup({
+        mcpServers: parseHeaderDrafts(draftSettings.mcpServers, headerDrafts),
+        memories,
+      });
+      const blob = new Blob([JSON.stringify(backup, null, 2)], {
+        type: "application/json;charset=utf-8",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = `tl-chat-settings-${backup.exportedAt.slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setMcpHeaderError(null);
+    } catch (error) {
+      setMcpHeaderError(
+        error instanceof Error
+          ? error.message
+          : "Settings backup could not be exported.",
       );
     }
   }
@@ -425,6 +453,29 @@ function SettingsPanelContent({
             onClearAll={onClearMemories}
             onDeleteMemory={onDeleteMemory}
           />
+
+          <section className="rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface-strong)] p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-semibold text-[color:var(--foreground)]">
+                  Local backup
+                </h3>
+                <p className="mt-1 text-sm leading-6 text-[color:var(--muted-foreground)]">
+                  Export memories and MCP servers as JSON. OpenRouter keys are
+                  intentionally excluded.
+                </p>
+              </div>
+              <button
+                className="flex shrink-0 items-center gap-2 rounded-full border border-[color:var(--border)] px-3 py-2 text-sm text-[color:var(--foreground)] transition hover:border-[color:var(--border-strong)] hover:text-[color:var(--accent-strong)]"
+                data-testid="export-settings-backup-button"
+                type="button"
+                onClick={handleExportBackup}
+              >
+                <Download className="h-4 w-4" />
+                Export
+              </button>
+            </div>
+          </section>
 
           <section className="rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface-strong)] p-5">
             <div className="flex items-center justify-between gap-3">

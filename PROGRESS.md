@@ -1,5 +1,23 @@
 # Progress
 
+## 2026-04-25T02:03:14+08:00
+
+Completed: Added a Settings UI export action for memories and MCP server settings. The exported JSON uses the versioned backup schema and intentionally excludes the OpenRouter API key.
+
+Verification:
+
+- `npm test`: passed, 11 files and 61 tests.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run test:e2e`: passed, 13 tests.
+
+Screenshots: none captured in this loop. The export flow is covered by a Playwright download assertion that reads and validates the JSON payload.
+
+Findings:
+
+- Exporting validates current MCP header drafts first, so invalid header JSON blocks backup export with the existing inline error path.
+- The new e2e test verifies the backup includes a memory and an MCP server, while excluding `openRouterApiKey`.
+
 ## 2026-04-25T02:00:18+08:00
 
 Completed: Added versioned backup schema helpers for memories and MCP server settings. The helper can create and parse backup payloads, defaults missing collections, and rejects invalid dates or invalid MCP server URLs.

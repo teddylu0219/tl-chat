@@ -2,7 +2,6 @@
 
 ## Active
 
-- [ ] Add Settings UI export action for memories and MCP server settings.
 - [ ] Add Settings UI import action for memories and MCP server settings.
 
 ## Backlog
@@ -19,3 +18,4 @@
 - [x] Add user-facing help text for attachment limits and supported file types near the composer.
 - [x] Add timeout and partial failure summaries when some MCP servers fail during tool discovery.
 - [x] Add backup schema helpers for memories and MCP server settings.
+- [x] Add Settings UI export action for memories and MCP server settings.

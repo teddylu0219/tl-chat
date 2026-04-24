@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 async function configureLocalKey(page: Page) {
   await page.getByTestId("header-settings-button").click();
@@ -50,6 +51,49 @@ test("discards canceled settings drafts and persists saved settings", async ({
   await expect(page.getByTestId("settings-panel")).toHaveCount(0);
   await page.getByTestId("header-settings-button").click();
   await expect(page.getByTestId("api-key-input")).toHaveValue("sk-or-v1-saved-key");
+});
+
+test("exports memories and MCP settings without the OpenRouter key", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  await configureLocalKey(page);
+  await sendPrompt(page, "i am a student from nycu");
+  await page.getByRole("button", { name: "Review memory" }).click();
+
+  await page.getByRole("button", { name: "Add server" }).click();
+  await page.getByPlaceholder("GitHub MCP").fill("Fixture MCP");
+  await page.getByPlaceholder("https://example.com/mcp").fill("https://example.com/mcp");
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByTestId("export-settings-backup-button").click();
+  const download = await downloadPromise;
+  const downloadPath = await download.path();
+
+  expect(download.suggestedFilename()).toMatch(/^tl-chat-settings-\d{4}-\d{2}-\d{2}\.json$/);
+  expect(downloadPath).toBeTruthy();
+
+  const backup = JSON.parse(await readFile(downloadPath!, "utf8")) as {
+    mcpServers: Array<{ name: string; url: string }>;
+    memories: Array<{ content: string }>;
+    openRouterApiKey?: string;
+    version: number;
+  };
+
+  expect(backup.version).toBe(1);
+  expect(backup.openRouterApiKey).toBeUndefined();
+  expect(backup.memories).toEqual([
+    expect.objectContaining({
+      content: "User is a student from NYCU",
+    }),
+  ]);
+  expect(backup.mcpServers).toEqual([
+    expect.objectContaining({
+      name: "Fixture MCP",
+      url: "https://example.com/mcp",
+    }),
+  ]);
 });
 
 test("renames a thread and keeps it after refresh", async ({ page }) => {
