@@ -4,6 +4,7 @@ import { openDB, type DBSchema } from "idb";
 import { DEFAULT_THEME, type ThemePreference } from "./app-config";
 import type { CouncilMessageMeta } from "./council";
 import { getPreviewText, sortConversations } from "./conversations";
+import type { McpServerConfig } from "./mcp";
 import type { MemoryEntry } from "./memory";
 import { DEFAULT_MODEL_ID } from "./models";
 
@@ -33,6 +34,7 @@ export type LocalSettings = {
   activeConversationId: string | null;
   customModelId: string;
   defaultModelId: string;
+  mcpServers: McpServerConfig[];
   openRouterApiKey: string;
   themePreference: ThemePreference;
 };
@@ -57,6 +59,7 @@ export const DEFAULT_SETTINGS: LocalSettings = {
   activeConversationId: null,
   customModelId: "",
   defaultModelId: DEFAULT_MODEL_ID,
+  mcpServers: [],
   openRouterApiKey: "",
   themePreference: DEFAULT_THEME,
 };

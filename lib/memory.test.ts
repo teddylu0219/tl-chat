@@ -1,4 +1,5 @@
 import {
+  extractMemoryOperationsFromToolParts,
   extractMemoriesFromResponse,
   extractMemoriesFromUserInput,
   normalizeMemoryOperations,
@@ -72,5 +73,50 @@ describe("memory helpers", () => {
       cleanText: "Got it.",
       memories: ["User is a student from NYCU"],
     });
+  });
+
+  it("extracts valid memory operations from tool outputs", () => {
+    expect(
+      extractMemoryOperationsFromToolParts({
+        parts: [
+          {
+            output: {
+              operation: {
+                content: "User prefers Traditional Chinese responses.",
+                type: "add",
+              },
+            },
+            type: "tool-remember_memory",
+          },
+          {
+            output: {
+              operation: {
+                id: "m1",
+                type: "delete",
+              },
+            },
+            type: "dynamic-tool",
+          },
+          {
+            output: {
+              operation: {
+                content: "",
+                type: "add",
+              },
+            },
+            type: "tool-remember_memory",
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        content: "User prefers Traditional Chinese responses.",
+        type: "add",
+      },
+      {
+        id: "m1",
+        type: "delete",
+      },
+    ]);
   });
 });

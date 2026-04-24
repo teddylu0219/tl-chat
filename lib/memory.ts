@@ -366,6 +366,34 @@ export function extractMemoriesFromResponse(text: string): {
   return { cleanText, memories };
 }
 
+export function extractMemoryOperationsFromToolParts(message: {
+  parts: Array<{ output?: unknown; type: string }>;
+}): MemoryOperation[] {
+  const operations: MemoryOperation[] = [];
+
+  for (const part of message.parts) {
+    if (
+      part.type !== "dynamic-tool" &&
+      !part.type.startsWith("tool-")
+    ) {
+      continue;
+    }
+
+    if (!part.output || typeof part.output !== "object") {
+      continue;
+    }
+
+    const output = part.output as { operation?: unknown };
+    const parsed = memoryOperationSchema.safeParse(output.operation);
+
+    if (parsed.success) {
+      operations.push(parsed.data);
+    }
+  }
+
+  return operations;
+}
+
 export function isDuplicateMemory(
   existing: MemoryEntry[],
   newContent: string,

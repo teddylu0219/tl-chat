@@ -1,14 +1,64 @@
 "use client";
 
-import { Eye, EyeOff, KeyRound, RotateCcw, Save, X } from "lucide-react";
+import {
+  Cable,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Plus,
+  RotateCcw,
+  Save,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useState } from "react";
 
 import { MemoryManager } from "@/components/memory-manager";
 import { formatConversationTimestamp, getDisplayTitle } from "@/lib/conversations";
+import { createMcpServerConfig } from "@/lib/mcp";
 import type { MemoryEntry } from "@/lib/memory";
 import { THEME_OPTIONS } from "@/lib/app-config";
 import { getModelOptions } from "@/lib/models";
 import type { ConversationRecord, LocalSettings } from "@/lib/persistence";
+
+function createHeaderDrafts(servers: LocalSettings["mcpServers"]) {
+  return Object.fromEntries(
+    servers.map((server) => [
+      server.id,
+      JSON.stringify(server.headers ?? {}, null, 2),
+    ]),
+  );
+}
+
+function parseHeaderDrafts(
+  servers: LocalSettings["mcpServers"],
+  headerDrafts: Record<string, string>,
+) {
+  return servers.map((server) => {
+    const rawHeaders = headerDrafts[server.id]?.trim() || "{}";
+    let parsed: unknown;
+
+    try {
+      parsed = JSON.parse(rawHeaders) as unknown;
+    } catch {
+      throw new Error("MCP headers must be valid JSON.");
+    }
+
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed) ||
+      Object.values(parsed).some((value) => typeof value !== "string")
+    ) {
+      throw new Error("MCP headers must be a JSON object with string values.");
+    }
+
+    return {
+      ...server,
+      headers: parsed as Record<string, string>,
+    };
+  });
+}
 
 type SettingsPanelProps = {
   archivedConversations: ConversationRecord[];
@@ -24,9 +74,16 @@ type SettingsPanelProps = {
   settings: LocalSettings;
 };
 
-export function SettingsPanel({
+export function SettingsPanel(props: SettingsPanelProps) {
+  if (!props.isOpen) {
+    return null;
+  }
+
+  return <SettingsPanelContent {...props} />;
+}
+
+function SettingsPanelContent({
   archivedConversations,
-  isOpen,
   memories,
   modelId,
   onAddMemory,
@@ -38,13 +95,43 @@ export function SettingsPanel({
   settings,
 }: SettingsPanelProps) {
   const [draftSettings, setDraftSettings] = useState(settings);
+  const [mcpHeaderError, setMcpHeaderError] = useState<string | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
-
-  if (!isOpen) {
-    return null;
-  }
+  const [headerDrafts, setHeaderDrafts] = useState<Record<string, string>>(
+    () => createHeaderDrafts(settings.mcpServers),
+  );
 
   const modelOptions = getModelOptions(draftSettings.customModelId);
+
+  function updateMcpServer(
+    serverId: string,
+    updater: (server: LocalSettings["mcpServers"][number]) => LocalSettings["mcpServers"][number],
+  ) {
+    setDraftSettings((currentSettings) => ({
+      ...currentSettings,
+      mcpServers: currentSettings.mcpServers.map((server) =>
+        server.id === serverId ? updater(server) : server,
+      ),
+    }));
+  }
+
+  async function handleSave() {
+    try {
+      const nextSettings: LocalSettings = {
+        ...draftSettings,
+        mcpServers: parseHeaderDrafts(draftSettings.mcpServers, headerDrafts),
+      };
+
+      setMcpHeaderError(null);
+      await onSave(nextSettings);
+    } catch (error) {
+      setMcpHeaderError(
+        error instanceof Error
+          ? error.message
+          : "MCP headers must be valid JSON.",
+      );
+    }
+  }
 
   return (
     <div
@@ -90,8 +177,12 @@ export function SettingsPanel({
               </div>
             </div>
 
-            <div className="mt-4 flex gap-3">
+            <form
+              className="mt-4 flex gap-3"
+              onSubmit={(event) => event.preventDefault()}
+            >
               <input
+                autoComplete="off"
                 className="flex-1 rounded-2xl border border-[color:var(--border)] bg-transparent px-4 py-3 text-sm text-[color:var(--foreground)] outline-none placeholder:text-[color:var(--muted-foreground)] focus:border-[color:var(--border-strong)]"
                 data-testid="api-key-input"
                 placeholder="sk-or-v1-..."
@@ -116,7 +207,7 @@ export function SettingsPanel({
                   <Eye className="h-4 w-4" />
                 )}
               </button>
-            </div>
+            </form>
           </section>
 
           <section className="grid gap-4 sm:grid-cols-2">
@@ -191,6 +282,142 @@ export function SettingsPanel({
               }
             />
           </label>
+
+          <section className="rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface-strong)] p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--surface-muted)] text-[color:var(--accent-strong)]">
+                  <Cable className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-[color:var(--foreground)]">
+                    MCP servers
+                  </h3>
+                  <p className="mt-1 text-sm text-[color:var(--muted-foreground)]">
+                    Connect Streamable HTTP servers so the assistant can call external tools.
+                  </p>
+                </div>
+              </div>
+              <button
+                className="flex items-center gap-2 rounded-full border border-[color:var(--border)] px-3 py-2 text-sm text-[color:var(--foreground)] transition hover:border-[color:var(--border-strong)] hover:text-[color:var(--accent-strong)]"
+                type="button"
+                onClick={() => {
+                  const nextServer = createMcpServerConfig();
+                  setDraftSettings((currentSettings) => ({
+                    ...currentSettings,
+                    mcpServers: [...currentSettings.mcpServers, nextServer],
+                  }));
+                  setHeaderDrafts((currentDrafts) => ({
+                    ...currentDrafts,
+                    [nextServer.id]: "{}",
+                  }));
+                }}
+              >
+                <Plus className="h-4 w-4" />
+                Add server
+              </button>
+            </div>
+
+            {draftSettings.mcpServers.length === 0 ? (
+              <div className="mt-4 rounded-[20px] border border-dashed border-[color:var(--border)] px-4 py-4 text-sm text-[color:var(--muted-foreground)]">
+                No MCP servers configured.
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {draftSettings.mcpServers.map((server) => (
+                  <div
+                    key={server.id}
+                    className="rounded-[22px] border border-[color:var(--border)] bg-[color:var(--surface-muted)] p-4"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="flex items-center gap-2 text-sm text-[color:var(--foreground)]">
+                        <input
+                          checked={server.enabled}
+                          type="checkbox"
+                          onChange={(event) =>
+                            updateMcpServer(server.id, (currentServer) => ({
+                              ...currentServer,
+                              enabled: event.target.checked,
+                            }))
+                          }
+                        />
+                        Enabled
+                      </label>
+                      <button
+                        aria-label={`Remove ${server.name}`}
+                        className="text-[color:var(--muted-foreground)] transition hover:text-[color:var(--danger)]"
+                        title="Remove MCP server"
+                        type="button"
+                        onClick={() => {
+                          setDraftSettings((currentSettings) => ({
+                            ...currentSettings,
+                            mcpServers: currentSettings.mcpServers.filter(
+                              (currentServer) => currentServer.id !== server.id,
+                            ),
+                          }));
+                          setHeaderDrafts((currentDrafts) => {
+                            const nextDrafts = { ...currentDrafts };
+                            delete nextDrafts[server.id];
+                            return nextDrafts;
+                          });
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <input
+                        className="rounded-2xl border border-[color:var(--border)] bg-transparent px-4 py-3 text-sm text-[color:var(--foreground)] outline-none placeholder:text-[color:var(--muted-foreground)]"
+                        placeholder="GitHub MCP"
+                        value={server.name}
+                        onChange={(event) =>
+                          updateMcpServer(server.id, (currentServer) => ({
+                            ...currentServer,
+                            name: event.target.value,
+                          }))
+                        }
+                      />
+                      <input
+                        className="rounded-2xl border border-[color:var(--border)] bg-transparent px-4 py-3 text-sm text-[color:var(--foreground)] outline-none placeholder:text-[color:var(--muted-foreground)]"
+                        placeholder="https://example.com/mcp"
+                        value={server.url}
+                        onChange={(event) =>
+                          updateMcpServer(server.id, (currentServer) => ({
+                            ...currentServer,
+                            url: event.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+
+                    <textarea
+                      aria-invalid={Boolean(mcpHeaderError)}
+                      className="mt-3 min-h-[96px] w-full rounded-2xl border border-[color:var(--border)] bg-transparent px-4 py-3 text-sm text-[color:var(--foreground)] outline-none placeholder:text-[color:var(--muted-foreground)]"
+                      placeholder={'{\n  "Authorization": "Bearer ..."\n}'}
+                      value={headerDrafts[server.id] ?? "{}"}
+                      onChange={(event) => {
+                        setMcpHeaderError(null);
+                        setHeaderDrafts((currentDrafts) => ({
+                          ...currentDrafts,
+                          [server.id]: event.target.value,
+                        }));
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {mcpHeaderError ? (
+              <p
+                aria-live="polite"
+                className="mt-3 rounded-[18px] border border-[color:var(--danger)]/25 bg-[color:var(--danger)]/8 px-4 py-3 text-sm text-[color:var(--danger)]"
+              >
+                {mcpHeaderError}
+              </p>
+            ) : null}
+          </section>
 
           <MemoryManager
             memories={memories}
@@ -267,7 +494,7 @@ export function SettingsPanel({
               className="flex items-center gap-2 rounded-full bg-[color:var(--accent)] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[color:var(--accent-strong)]"
               data-testid="save-settings-button"
               type="button"
-              onClick={() => void onSave(draftSettings)}
+              onClick={() => void handleSave()}
             >
               <Save className="h-4 w-4" />
               Save settings

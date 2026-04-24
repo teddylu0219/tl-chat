@@ -1,13 +1,21 @@
+import type { JSONSchema7 } from "@ai-sdk/provider";
 import {
   convertToModelMessages,
   createUIMessageStream,
   createUIMessageStreamResponse,
+  dynamicTool,
+  jsonSchema,
+  stepCountIs,
   streamText,
+  tool,
 } from "ai";
-import { ZodError } from "zod";
+import { ZodError, z } from "zod";
 
 import { parseChatRequest } from "@/lib/chat-schema";
+import { callMcpTool, createMcpToolKey, getActiveMcpServers, listMcpTools } from "@/lib/mcp";
+import { getModelOption, modelSupportsTools } from "@/lib/models";
 import { createOpenRouterProvider, getErrorMessage, getErrorStatus } from "@/lib/openrouter";
+import { resolveModelRoute } from "@/lib/router";
 
 export const maxDuration = 60;
 
@@ -56,26 +64,256 @@ function getLastMessageText(
     .join("\n");
 }
 
+function buildCapabilityPrompt() {
+  return [
+    "Use tools when they help you answer more accurately.",
+    "If the user explicitly asks you to remember or forget something long-term, use the memory tools instead of only promising.",
+    "Do not invent tool outputs. If a tool fails, say what failed and continue with the best fallback you can.",
+  ].join("\n");
+}
+
+function buildSearchMemoriesTool(
+  memories: Awaited<ReturnType<typeof parseChatRequest>>["memories"],
+) {
+  return tool({
+    description: "Search the user's long-term memories by keyword.",
+    execute: async ({ query }) => {
+      const normalizedQuery = query.trim().toLowerCase();
+      const matches =
+        normalizedQuery.length === 0
+          ? memories
+          : memories.filter((memory) =>
+              memory.content.toLowerCase().includes(normalizedQuery),
+            );
+
+      return {
+        matches,
+      };
+    },
+    inputSchema: z.object({
+      query: z.string().default(""),
+    }),
+  });
+}
+
+function buildMemoryMutationTools() {
+  return {
+    delete_memory: tool({
+      description:
+        "Queue a long-term memory deletion when the user explicitly wants something forgotten.",
+      execute: async ({ id, reason }) => ({
+        operation: { id, type: "delete" as const },
+        reason,
+        status: "queued",
+      }),
+      inputSchema: z.object({
+        id: z.string().trim().min(1),
+        reason: z.string().trim().optional(),
+      }),
+    }),
+    remember_memory: tool({
+      description:
+        "Queue a new long-term memory when the user explicitly wants something remembered.",
+      execute: async ({ content }) => ({
+        operation: { content: content.trim(), type: "add" as const },
+        status: "queued",
+      }),
+      inputSchema: z.object({
+        content: z.string().trim().min(1),
+      }),
+    }),
+    update_memory: tool({
+      description:
+        "Rewrite an existing long-term memory when the user corrects or refines it.",
+      execute: async ({ content, id }) => ({
+        operation: { content: content.trim(), id, type: "update" as const },
+        status: "queued",
+      }),
+      inputSchema: z.object({
+        content: z.string().trim().min(1),
+        id: z.string().trim().min(1),
+      }),
+    }),
+  };
+}
+
+function buildCurrentTimeTool() {
+  return tool({
+    description: "Get the current time in a requested IANA timezone.",
+    execute: async ({ timezone }) => {
+      const now = new Date();
+      const resolvedTimezone = timezone?.trim() || "UTC";
+
+      return {
+        iso: now.toISOString(),
+        local: new Intl.DateTimeFormat("en-US", {
+          dateStyle: "full",
+          timeStyle: "long",
+          timeZone: resolvedTimezone,
+        }).format(now),
+        timezone: resolvedTimezone,
+      };
+    },
+    inputSchema: z.object({
+      timezone: z.string().trim().optional(),
+    }),
+  });
+}
+
+async function buildMcpTools(
+  servers: Awaited<ReturnType<typeof parseChatRequest>>["mcpServers"],
+) {
+  const activeServers = getActiveMcpServers(servers);
+
+  if (activeServers.length === 0) {
+    return {};
+  }
+
+  const usedToolKeys = new Set<string>();
+  const settled = await Promise.allSettled(
+    activeServers.map(async (server) => ({
+      server,
+      tools: await listMcpTools(server),
+    })),
+  );
+
+  return settled.reduce<Record<string, ReturnType<typeof dynamicTool>>>(
+    (toolSet, result) => {
+      if (result.status !== "fulfilled") {
+        return toolSet;
+      }
+
+      const { server, tools } = result.value;
+
+      for (const mcpTool of tools) {
+        const toolKey = createMcpToolKey({
+          serverName: server.name,
+          toolName: mcpTool.name,
+          usedKeys: usedToolKeys,
+        });
+
+        toolSet[toolKey] = dynamicTool({
+          description:
+            [
+              `MCP tool from ${server.name}.`,
+              mcpTool.description?.trim(),
+            ]
+              .filter(Boolean)
+              .join(" "),
+          execute: async (args) => {
+            try {
+              const result = await callMcpTool({
+                args: (args as Record<string, unknown>) ?? {},
+                server,
+                toolName: mcpTool.name,
+              });
+
+              return {
+                content: result.text,
+                isError: result.isError,
+                server: server.name,
+                structuredContent: result.structuredContent ?? null,
+                tool: mcpTool.name,
+              };
+            } catch (error) {
+              return {
+                content: getErrorMessage(error),
+                isError: true,
+                server: server.name,
+                tool: mcpTool.name,
+              };
+            }
+          },
+          inputSchema: jsonSchema(mcpTool.inputSchema as JSONSchema7),
+          title: `${server.name}: ${mcpTool.title ?? mcpTool.name}`,
+        });
+      }
+
+      return toolSet;
+    },
+    {},
+  );
+}
+
 export async function POST(request: Request) {
   try {
     const body = await parseChatRequest(await request.json());
+    const activeMcpServers = getActiveMcpServers(body.mcpServers);
+    const route = resolveModelRoute({
+      availableToolCount: 4 + activeMcpServers.length,
+      customModelId: body.customModelId,
+      messages: body.messages,
+      requestedModelId: body.modelId,
+    });
+    const provider = createOpenRouterProvider(body.apiKey, request.url);
+    const canUseTools = modelSupportsTools(route.modelId, body.customModelId);
 
     if (process.env.OPENROUTER_MOCK_RESPONSE === "1") {
-      return buildMockResponse(body.modelId, getLastMessageText(body.messages));
+      return buildMockResponse(route.modelId, getLastMessageText(body.messages));
     }
 
-    const provider = createOpenRouterProvider(body.apiKey, request.url);
-    const modelMessages = await convertToModelMessages(
-      body.messages.map(omitMessageId),
-    );
+    const modelMessages = await convertToModelMessages(body.messages.map(omitMessageId), {
+      convertDataPart: (part) => {
+        if (part.type !== "data-attachment-text") {
+          return undefined;
+        }
 
+        const attachment = part.data as {
+          filename: string;
+          mediaType: string;
+          text: string;
+        };
+
+        return {
+          text: [
+            `Attached document: ${attachment.filename}`,
+            `Media type: ${attachment.mediaType}`,
+            "",
+            attachment.text,
+          ].join("\n"),
+          type: "text" as const,
+        };
+      },
+    });
+    const tools = canUseTools
+      ? {
+          get_current_time: buildCurrentTimeTool(),
+          search_memories: buildSearchMemoriesTool(body.memories),
+          ...buildMemoryMutationTools(),
+          ...(await buildMcpTools(body.mcpServers)),
+        }
+      : undefined;
+    const fullSystemPrompt =
+      [body.systemPrompt?.trim(), canUseTools ? buildCapabilityPrompt() : ""]
+        .filter(Boolean)
+        .join("\n\n") || undefined;
     const result = streamText({
-      model: provider(body.modelId),
-      system: body.systemPrompt || undefined,
+      model: provider(route.modelId),
+      system: fullSystemPrompt,
       messages: modelMessages,
+      ...(tools
+        ? {
+            stopWhen: stepCountIs(6),
+            tools,
+          }
+        : {}),
     });
 
-    return result.toUIMessageStreamResponse();
+    return result.toUIMessageStreamResponse({
+      messageMetadata: ({ part }) => {
+        if (part.type !== "start" && part.type !== "finish") {
+          return undefined;
+        }
+
+        return {
+          routeMode: route.mode,
+          routeReason: route.reason,
+          routedModelId: route.modelId,
+          routedModelLabel:
+            getModelOption(route.modelId, body.customModelId)?.label ?? route.label,
+        };
+      },
+    });
   } catch (error) {
     if (error instanceof ZodError) {
       return new Response(error.issues[0]?.message ?? "Invalid request body.", {

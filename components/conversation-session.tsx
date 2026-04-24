@@ -8,14 +8,18 @@ import {
   ChevronDown,
   CornerDownRight,
   Copy,
+  FileText,
+  ImageIcon,
   LoaderCircle,
   Menu,
   Mic,
   MicOff,
+  Paperclip,
   RefreshCcw,
   Settings2,
   Sparkles,
   Square,
+  X,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -34,18 +38,26 @@ import { ConversationActionMenu } from "@/components/conversation-action-menu";
 import { useToast } from "@/components/toast";
 import { APP_NAME } from "@/lib/app-config";
 import {
+  MAX_ATTACHMENTS,
+  type ComposerAttachment,
+  isAttachmentTextPart,
+  prepareComposerAttachments,
+} from "@/lib/attachments";
+import {
   deriveConversationTitle,
   getDisplayTitle,
   isMessageStreaming,
   getMessageText,
 } from "@/lib/conversations";
 import {
+  extractMemoryOperationsFromToolParts,
   extractMemoriesFromResponse,
   formatMemoriesAsSystemPrompt,
   type MemoryOperation,
   type MemoryEntry,
 } from "@/lib/memory";
 import { getModelOption, getModelOptions } from "@/lib/models";
+import type { McpServerConfig } from "@/lib/mcp";
 import type { ConversationRecord } from "@/lib/persistence";
 import { useSpeechRecognition } from "@/lib/use-speech-recognition";
 
@@ -53,6 +65,7 @@ type ConversationSessionProps = {
   conversation: ConversationRecord;
   customModelId: string;
   memories: MemoryEntry[];
+  mcpServers: McpServerConfig[];
   onApplyMemoryOperations?: (operations: MemoryOperation[]) => void | Promise<void>;
   onConversationChange: (conversation: ConversationRecord) => void;
   onDeleteConversation: (conversation: ConversationRecord) => void;
@@ -68,10 +81,47 @@ type ConversationSessionProps = {
 const CHAT_STREAM_THROTTLE_MS = 120;
 const LARGE_MESSAGE_RICH_RENDER_THRESHOLD = 2400;
 
+type RouteMetadata = {
+  routeMode?: string;
+  routeReason?: string;
+  routedModelId?: string;
+  routedModelLabel?: string;
+};
+
 function extractCodeLanguage(className?: string) {
   const match = /language-([\w-]+)/.exec(className ?? "");
 
   return match?.[1] ?? null;
+}
+
+function isToolPart(part: UIMessage["parts"][number]) {
+  return part.type === "dynamic-tool" || part.type.startsWith("tool-");
+}
+
+function getRouteMetadata(message?: UIMessage): RouteMetadata | null {
+  const metadata = message?.metadata as RouteMetadata | undefined;
+
+  if (!metadata) {
+    return null;
+  }
+
+  return metadata;
+}
+
+function getToolDisplayName(part: UIMessage["parts"][number]) {
+  if (!isToolPart(part)) {
+    return null;
+  }
+
+  if ("title" in part && typeof part.title === "string" && part.title.trim()) {
+    return part.title;
+  }
+
+  if (part.type === "dynamic-tool") {
+    return part.toolName;
+  }
+
+  return part.type.replace(/^tool-/, "").replace(/_/g, " ");
 }
 
 async function requestMemoryOperations({
@@ -372,6 +422,117 @@ function ThinkingIndicator() {
   );
 }
 
+function formatToolPayload(value: unknown) {
+  if (value == null) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+function MessageAttachments({ message }: { message: UIMessage }) {
+  const fileParts = message.parts.filter((part) => part.type === "file");
+  const textAttachments = message.parts.filter(isAttachmentTextPart);
+
+  if (fileParts.length === 0 && textAttachments.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mb-3 flex flex-wrap gap-2">
+      {fileParts.map((part, index) =>
+        part.mediaType.startsWith("image/") ? (
+          <a
+            key={`${part.filename ?? part.url}-${index}`}
+            href={part.url}
+            target="_blank"
+            rel="noreferrer"
+            className="overflow-hidden rounded-[18px] border border-white/15 bg-white/10"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              alt={part.filename ?? "Uploaded image"}
+              className="h-28 w-28 object-cover"
+              src={part.url}
+            />
+          </a>
+        ) : (
+          <div
+            key={`${part.filename ?? part.url}-${index}`}
+            className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-2 text-xs"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            {part.filename ?? "Attachment"}
+          </div>
+        ),
+      )}
+      {textAttachments.map((part) => (
+        <div
+          key={part.id}
+          className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-2 text-xs"
+        >
+          <FileText className="h-3.5 w-3.5" />
+          {part.data.filename}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ToolActivityList({ message }: { message: UIMessage }) {
+  const toolParts = message.parts.filter(isToolPart);
+
+  if (toolParts.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mb-3 space-y-2">
+      {toolParts.map((part, index) => {
+        const payload =
+          "output" in part && part.output !== undefined
+            ? formatToolPayload(part.output)
+            : "errorText" in part && part.errorText
+              ? part.errorText
+              : "input" in part
+                ? formatToolPayload(part.input)
+                : "";
+
+        return (
+          <div
+            key={`${part.type}-${"toolCallId" in part ? part.toolCallId : index}`}
+            className="rounded-[18px] border border-[color:var(--border)] bg-[color:var(--surface-muted)] px-4 py-3"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--muted-foreground)]">
+                {getToolDisplayName(part)}
+              </p>
+              {"state" in part ? (
+                <span className="text-[11px] text-[color:var(--muted-foreground)]">
+                  {part.state}
+                </span>
+              ) : null}
+            </div>
+            {payload ? (
+              <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-words text-[12px] leading-6 text-[color:var(--foreground)]">
+                {payload}
+              </pre>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function MessageBubble({
   message,
   modelLabel,
@@ -384,6 +545,7 @@ function MessageBubble({
   const rawText = getMessageText(message);
   const isUser = message.role === "user";
   const isStreaming = !isUser && isMessageStreaming(message);
+  const routeMetadata = getRouteMetadata(message);
   // Strip <memory> tags from display
   const text = isUser ? rawText : extractMemoriesFromResponse(rawText).cleanText;
 
@@ -405,7 +567,9 @@ function MessageBubble({
               isUser ? "text-white/70" : "text-[color:var(--muted-foreground)]"
             }`}
           >
-            {isUser ? "You" : modelLabel ?? "Assistant"}
+            {isUser
+              ? "You"
+              : routeMetadata?.routedModelLabel || modelLabel || "Assistant"}
           </p>
           {isUser && text ? (
             <CopyTextButton
@@ -416,6 +580,13 @@ function MessageBubble({
             />
           ) : null}
         </div>
+        {routeMetadata?.routeMode && routeMetadata.routeMode !== "manual" ? (
+          <p className="mb-2 px-0.5 text-[12px] text-[color:var(--muted-foreground)]">
+            {routeMetadata.routeReason}
+          </p>
+        ) : null}
+        <MessageAttachments message={message} />
+        {!isUser ? <ToolActivityList message={message} /> : null}
         <MarkdownMessage
           mode={isStreaming ? "streaming" : "rich"}
           text={text}
@@ -448,6 +619,7 @@ export function ConversationSession({
   conversation,
   customModelId,
   memories,
+  mcpServers,
   onApplyMemoryOperations,
   onConversationChange,
   onDeleteConversation,
@@ -459,12 +631,15 @@ export function ConversationSession({
   onToggleSidebar,
   openRouterApiKey,
 }: ConversationSessionProps) {
+  const { showToast } = useToast();
   const [draft, setDraft] = useState(conversation.draft);
   const [gateError, setGateError] = useState<string | null>(null);
   const [modelId, setModelId] = useState(conversation.modelId);
+  const [pendingAttachments, setPendingAttachments] = useState<ComposerAttachment[]>([]);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const isAutoScrolling = useRef(false);
   const isNearBottom = useRef(true);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const messageContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [transport] = useState(
@@ -570,6 +745,10 @@ export function ConversationSession({
   }, [draft]);
 
   useEffect(() => {
+    setPendingAttachments([]);
+  }, [conversation.id]);
+
+  useEffect(() => {
     if (status === "submitted") {
       isNearBottom.current = true;
     }
@@ -602,6 +781,7 @@ export function ConversationSession({
     }
 
     processedMemoryMessageIdRef.current = lastMessage.id;
+    const toolOperations = extractMemoryOperationsFromToolParts(lastMessage);
 
     const recentConversation = messages
       .slice(-6)
@@ -619,6 +799,16 @@ export function ConversationSession({
     const assistantMemories = extractMemoriesFromResponse(
       getMessageText(lastMessage),
     ).memories;
+
+    if (toolOperations.length > 0) {
+      const assistantOperations = assistantMemories.map((content) => ({
+        content,
+        type: "add" as const,
+      }));
+
+      void onApplyMemoryOperations([...toolOperations, ...assistantOperations]);
+      return;
+    }
 
     void requestMemoryOperations({
       apiKey: openRouterApiKey.trim(),
@@ -651,10 +841,39 @@ export function ConversationSession({
   // Build system prompt from memories
   const systemPrompt = formatMemoriesAsSystemPrompt(memories);
 
+  async function handleAttachmentSelection(files: FileList | null) {
+    const { attachments, rejected } = await prepareComposerAttachments(files);
+
+    if (attachments.length > 0) {
+      setPendingAttachments((currentAttachments) => {
+        const nextAttachments = [...currentAttachments, ...attachments].slice(
+          0,
+          MAX_ATTACHMENTS,
+        );
+
+        if (currentAttachments.length + attachments.length > MAX_ATTACHMENTS) {
+          showToast(`Only ${MAX_ATTACHMENTS} attachments can be queued at once.`);
+        }
+
+        return nextAttachments;
+      });
+    }
+
+    if (rejected.length > 0) {
+      showToast(rejected[0]);
+    }
+  }
+
+  function removePendingAttachment(attachmentId: string) {
+    setPendingAttachments((currentAttachments) =>
+      currentAttachments.filter((attachment) => attachment.id !== attachmentId),
+    );
+  }
+
   async function handleSubmit(textOverride?: string) {
     const nextText = (textOverride ?? draft).trim();
 
-    if (!nextText || isStreaming) {
+    if ((!nextText && pendingAttachments.length === 0) || isStreaming) {
       return;
     }
 
@@ -667,14 +886,33 @@ export function ConversationSession({
     clearError();
     setGateError(null);
 
+    const previousAttachments = pendingAttachments;
+    const nextParts: UIMessage["parts"] = [
+      ...pendingAttachments.map((attachment) => attachment.part as UIMessage["parts"][number]),
+      ...(
+        nextText
+          ? [{ type: "text" as const, text: nextText }]
+          : pendingAttachments.length > 0
+            ? [{ type: "text" as const, text: "Please use the attached materials in your answer." }]
+            : []
+      ),
+    ];
+
     setDraft("");
+    setPendingAttachments([]);
 
     try {
       await sendMessage(
-        { text: nextText },
+        { parts: nextParts },
         {
           body: {
             apiKey: openRouterApiKey.trim(),
+            customModelId: customModelId || undefined,
+            mcpServers,
+            memories: memories.map((memory) => ({
+              content: memory.content,
+              id: memory.id,
+            })),
             modelId,
             systemPrompt: systemPrompt || undefined,
           },
@@ -682,6 +920,7 @@ export function ConversationSession({
       );
     } catch {
       setDraft(nextText);
+      setPendingAttachments(previousAttachments);
     }
   }
 
@@ -696,6 +935,12 @@ export function ConversationSession({
     await regenerate({
       body: {
         apiKey: openRouterApiKey.trim(),
+        customModelId: customModelId || undefined,
+        mcpServers,
+        memories: memories.map((memory) => ({
+          content: memory.content,
+          id: memory.id,
+        })),
         modelId,
         systemPrompt: systemPrompt || undefined,
       },
@@ -718,16 +963,20 @@ export function ConversationSession({
     }
 
     if (lastMessage.role === "user") {
-      const text = getMessageText(lastMessage);
-
       await sendMessage(
         {
           messageId: lastMessage.id,
-          text,
+          parts: lastMessage.parts,
         },
         {
           body: {
             apiKey: openRouterApiKey.trim(),
+            customModelId: customModelId || undefined,
+            mcpServers,
+            memories: memories.map((memory) => ({
+              content: memory.content,
+              id: memory.id,
+            })),
             modelId,
             systemPrompt: systemPrompt || undefined,
           },
@@ -739,6 +988,12 @@ export function ConversationSession({
     await regenerate({
       body: {
         apiKey: openRouterApiKey.trim(),
+        customModelId: customModelId || undefined,
+        mcpServers,
+        memories: memories.map((memory) => ({
+          content: memory.content,
+          id: memory.id,
+        })),
         modelId,
         systemPrompt: systemPrompt || undefined,
       },
@@ -946,10 +1201,48 @@ export function ConversationSession({
 
       <div className="border-t border-[color:var(--border)] p-3.5 sm:px-6 sm:py-4">
         <div className="mx-auto max-w-[920px] rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface-strong)] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]">
+          <input
+            ref={fileInputRef}
+            className="hidden"
+            multiple
+            accept="image/*,.txt,.md,.markdown,.csv,.json,.jsonl,.ts,.tsx,.js,.jsx,.css,.html,.xml,.yml,.yaml"
+            type="file"
+            onChange={(event) => {
+              void handleAttachmentSelection(event.target.files);
+              event.target.value = "";
+            }}
+          />
+
           {/* Voice transcript preview */}
           {isListening && transcript ? (
             <div className="mb-2 px-2.5 text-[13px] italic text-[color:var(--muted-foreground)]">
               {transcript}
+            </div>
+          ) : null}
+
+          {pendingAttachments.length > 0 ? (
+            <div className="mb-2 flex flex-wrap gap-2 px-2.5">
+              {pendingAttachments.map((attachment) => (
+                <div
+                  key={attachment.id}
+                  className="inline-flex items-center gap-2 rounded-full border border-[color:var(--border)] bg-[color:var(--surface-muted)] px-3 py-2 text-[12px] text-[color:var(--foreground)]"
+                >
+                  {attachment.kind === "image" ? (
+                    <ImageIcon className="h-3.5 w-3.5" />
+                  ) : (
+                    <FileText className="h-3.5 w-3.5" />
+                  )}
+                  <span className="max-w-[16rem] truncate">{attachment.filename}</span>
+                  <button
+                    aria-label={`Remove ${attachment.filename}`}
+                    className="text-[color:var(--muted-foreground)] transition hover:text-[color:var(--foreground)]"
+                    type="button"
+                    onClick={() => removePendingAttachment(attachment.id)}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
             </div>
           ) : null}
 
@@ -993,9 +1286,23 @@ export function ConversationSession({
                   {memories.length} memories
                 </span>
               ) : null}
+              {mcpServers.filter((server) => server.enabled && server.url.trim()).length > 0 ? (
+                <span className="rounded-full bg-[color:var(--surface-muted)] px-2 py-1">
+                  {mcpServers.filter((server) => server.enabled && server.url.trim()).length} MCP
+                </span>
+              ) : null}
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                aria-label="Attach files"
+                className="flex h-9 w-9 items-center justify-center rounded-full text-[color:var(--muted-foreground)] transition hover:text-[color:var(--foreground)]"
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Paperclip className="h-4 w-4" />
+              </button>
+
               {/* Voice input button */}
               {isSpeechSupported ? (
                 <button
@@ -1027,7 +1334,7 @@ export function ConversationSession({
               <button
                 className="motion-lift flex h-9 items-center gap-2 rounded-full bg-[color:var(--accent)] px-4 text-[13px] font-medium text-white transition hover:bg-[color:var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
                 data-testid="send-button"
-                disabled={isStreaming || draft.trim().length === 0}
+                disabled={isStreaming || (draft.trim().length === 0 && pendingAttachments.length === 0)}
                 type="button"
                 onClick={() => void handleSubmit()}
               >

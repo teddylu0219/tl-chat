@@ -1,0 +1,149 @@
+{
+  "currentTask": "Continue iterative optimization loop",
+  "errors": [
+    {
+      "encounteredAt": "2026-04-25T00:15:47+08:00",
+      "resolvedAt": "2026-04-25T00:16:03+08:00",
+      "status": "resolved",
+      "summary": "MCP unit test expected MCP-Protocol-Version header on initialize, but current client sends protocolVersion in the initialize body and headers on later session calls."
+    },
+    {
+      "encounteredAt": "2026-04-25T00:20:34+08:00",
+      "resolvedAt": "2026-04-25T00:21:01+08:00",
+      "status": "resolved",
+      "summary": "Playwright wrapper launch used an inline environment variable that expanded to an empty command path."
+    },
+    {
+      "encounteredAt": "2026-04-25T00:21:49+08:00",
+      "resolvedAt": "2026-04-25T00:22:25+08:00",
+      "status": "resolved",
+      "summary": "Playwright UI inspection showed invalid MCP header JSON exposes a raw JSON.parse error message in the settings panel."
+    },
+    {
+      "encounteredAt": "2026-04-25T00:22:25+08:00",
+      "resolvedAt": "2026-04-25T00:23:16+08:00",
+      "status": "resolved",
+      "summary": "Playwright console reported that the OpenRouter password field is not contained in a form."
+    },
+    {
+      "encounteredAt": "2026-04-25T00:28:36+08:00",
+      "resolvedAt": "2026-04-25T00:28:57+08:00",
+      "status": "resolved",
+      "summary": "Settings draft reset used synchronous setState inside useEffect, which failed react-hooks/set-state-in-effect during npm run lint."
+    }
+  ],
+  "log": [
+    {
+      "completedAt": "2026-04-25T00:14:45+08:00",
+      "status": "completed",
+      "task": "Created progress.json to track Long-term memory, Multimodal, Auto routing, Tool use/MCP, and UI/UX optimization work."
+    },
+    {
+      "completedAt": "2026-04-25T00:14:45+08:00",
+      "status": "completed",
+      "task": "Audited current chat route, MCP client, and model router to choose the next reliability improvement."
+    },
+    {
+      "completedAt": "2026-04-25T00:16:03+08:00",
+      "status": "completed",
+      "task": "Added MCP client tests for active server filtering, Streamable HTTP session initialization, SSE tool listing, and tool call text extraction."
+    },
+    {
+      "completedAt": "2026-04-25T00:16:30+08:00",
+      "status": "completed",
+      "task": "Added chat schema coverage for text attachment data parts, MCP server settings, and long-term memory payloads."
+    },
+    {
+      "completedAt": "2026-04-25T00:17:14+08:00",
+      "status": "completed",
+      "task": "Allowed incomplete MCP server drafts without blocking chat requests and replaced settings header alerts with inline validation."
+    },
+    {
+      "completedAt": "2026-04-25T00:18:30+08:00",
+      "status": "completed",
+      "task": "Extracted multimodal attachment handling into lib/attachments.ts and added tests for image encoding, size rejection, text detection, and truncation."
+    },
+    {
+      "completedAt": "2026-04-25T00:19:15+08:00",
+      "status": "completed",
+      "task": "Improved auto-routing for large text attachments and explicit MCP/tool prompts, with focused router tests."
+    },
+    {
+      "completedAt": "2026-04-25T00:19:46+08:00",
+      "status": "completed",
+      "task": "Improved MCP settings accessibility with labeled remove controls, inline error clearing, aria-invalid, and aria-live feedback."
+    },
+    {
+      "completedAt": "2026-04-25T00:20:09+08:00",
+      "status": "completed",
+      "task": "Ran full verification: npm run lint, npm test, and npm run build all passed."
+    },
+    {
+      "completedAt": "2026-04-25T00:22:25+08:00",
+      "status": "completed",
+      "task": "Inspected the app with Playwright, verified settings/MCP UI behavior, and confirmed stable inline MCP header validation copy."
+    },
+    {
+      "completedAt": "2026-04-25T00:23:16+08:00",
+      "status": "completed",
+      "task": "Wrapped the OpenRouter key input in a non-submit form and confirmed the password-field console warning is gone on reload."
+    },
+    {
+      "completedAt": "2026-04-25T00:23:55+08:00",
+      "status": "completed",
+      "task": "Moved memory tool operation extraction into lib/memory.ts with schema validation and unit coverage."
+    },
+    {
+      "completedAt": "2026-04-25T00:25:00+08:00",
+      "status": "completed",
+      "task": "Ran final verification for the current pass: npm test, npm run lint, and npm run build all passed."
+    },
+    {
+      "completedAt": "2026-04-25T00:26:17+08:00",
+      "status": "completed",
+      "task": "Made multimodal attachment overflow explicit by rejecting files beyond the 4-file limit and verified lib/attachments.test.ts passes."
+    },
+    {
+      "completedAt": "2026-04-25T00:27:00+08:00",
+      "status": "completed",
+      "task": "Resolved auto/router to the default concrete model for background memory management and verified lib/models.test.ts passes."
+    },
+    {
+      "completedAt": "2026-04-25T00:27:50+08:00",
+      "status": "completed",
+      "task": "Prevented MCP tool key collisions with safe slug fallback and suffixing, wired chat registration to it, and verified lib/mcp.test.ts passes."
+    },
+    {
+      "completedAt": "2026-04-25T00:28:57+08:00",
+      "status": "completed",
+      "task": "Reset settings drafts by unmounting panel content on close, fixed the lint violation, and verified npm run lint plus npm run build pass."
+    },
+    {
+      "completedAt": "2026-04-25T00:29:40+08:00",
+      "status": "completed",
+      "task": "Expanded auto-routing heuristics for Traditional Chinese code, analysis, and memory/tool prompts and verified lib/router.test.ts passes."
+    },
+    {
+      "completedAt": "2026-04-25T00:30:09+08:00",
+      "status": "completed",
+      "task": "Ran full verification after iterative optimizations: npm test, npm run lint, and npm run build all passed."
+    },
+    {
+      "completedAt": "2026-04-25T00:30:50+08:00",
+      "status": "completed",
+      "task": "Ignored local .playwright-cli inspection artifacts so UI validation logs no longer pollute git status."
+    },
+    {
+      "completedAt": "2026-04-25T00:31:19+08:00",
+      "status": "completed",
+      "task": "Reviewed current official docs for Open WebUI MCP/extensibility, LibreChat memory/MCP, Flowise Supervisor/Workers, and Dify If-Else/MCP to guide the next optimization choices."
+    },
+    {
+      "completedAt": "2026-04-25T01:48:27+08:00",
+      "status": "completed",
+      "task": "Created PROMPT.md, PLAN.md, TODO.md, PROGRESS.md, and screenshots/.gitkeep, then verified npm test, npm run lint, and npm run build all pass."
+    }
+  ],
+  "nextTask": "Commit the repository control docs and accumulated verified implementation checkpoint, then begin the next loop from PROMPT.md.",
+  "updatedAt": "2026-04-25T01:48:27+08:00"
+}

@@ -8,6 +8,7 @@ import {
   parseMemoryManagerResponse,
   resolveMemoryCandidates,
 } from "@/lib/memory";
+import { getMemoryManagerModelId } from "@/lib/models";
 import { createOpenRouterProvider, getErrorMessage, getErrorStatus } from "@/lib/openrouter";
 
 export const maxDuration = 30;
@@ -67,8 +68,9 @@ export async function POST(request: Request) {
     }
 
     const provider = createOpenRouterProvider(body.apiKey, request.url);
+    const memoryModelId = getMemoryManagerModelId(body.modelId);
     const result = await generateText({
-      model: provider(body.modelId),
+      model: provider(memoryModelId),
       system: buildMemoryManagerSystemPrompt(),
       prompt: buildMemoryManagerUserPrompt({
         conversation: body.conversation,
@@ -82,7 +84,7 @@ export async function POST(request: Request) {
       operations = parseMemoryManagerResponse(result.text).operations;
     } catch {
       const repaired = await generateText({
-        model: provider(body.modelId),
+        model: provider(memoryModelId),
         prompt: buildMemoryRepairPrompt(result.text),
         temperature: 0,
       });

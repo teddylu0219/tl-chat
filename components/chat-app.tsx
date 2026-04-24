@@ -588,6 +588,7 @@ function ChatAppInner() {
                 conversation={activeConversation}
                 customModelId={settings.customModelId}
                 memories={memories}
+                mcpServers={settings.mcpServers}
                 openRouterApiKey={settings.openRouterApiKey}
                 onApplyMemoryOperations={(operations) =>
                   void handleApplyMemoryOperations(operations)
@@ -655,6 +656,7 @@ function ChatAppInner() {
       <SettingsPanel
         archivedConversations={archivedConversations}
         isOpen={isSettingsOpen}
+        key={isSettingsOpen ? `settings-open-${JSON.stringify(settings)}` : "settings-closed"}
         memories={memories}
         modelId={activeConversation.modelId}
         onAddMemory={(entry) => void handleAddMemory(entry)}
