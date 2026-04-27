@@ -84,21 +84,10 @@ describe("chat request schema", () => {
     });
   });
 
-  it("accepts text attachment data parts and MCP server settings", async () => {
+  it("accepts text attachment data parts, memories, and web search flag", async () => {
     await expect(
       parseChatRequest({
         apiKey: "sk-or-v1-example-key",
-        mcpServers: [
-          {
-            enabled: true,
-            headers: {
-              Authorization: "Bearer local-token",
-            },
-            id: "mcp_1",
-            name: "Local MCP",
-            url: "https://example.com/mcp",
-          },
-        ],
         memories: [
           {
             content: "User prefers concise Traditional Chinese responses.",
@@ -124,38 +113,23 @@ describe("chat request schema", () => {
           },
         ],
         modelId: "auto/router",
+        webSearchEnabled: true,
       }),
     ).resolves.toMatchObject({
-      mcpServers: [
-        {
-          headers: {
-            Authorization: "Bearer local-token",
-          },
-          name: "Local MCP",
-        },
-      ],
       memories: [
         {
           id: "memory_1",
         },
       ],
       modelId: "auto/router",
+      webSearchEnabled: true,
     });
   });
 
-  it("accepts incomplete MCP server drafts without blocking chat requests", async () => {
+  it("defaults web search to disabled", async () => {
     await expect(
       parseChatRequest({
         apiKey: "sk-or-v1-example-key",
-        mcpServers: [
-          {
-            enabled: true,
-            headers: {},
-            id: "draft_server",
-            name: "Draft server",
-            url: "",
-          },
-        ],
         messages: [
           {
             id: "msg_1",
@@ -166,12 +140,7 @@ describe("chat request schema", () => {
         modelId: "auto/router",
       }),
     ).resolves.toMatchObject({
-      mcpServers: [
-        {
-          id: "draft_server",
-          url: "",
-        },
-      ],
+      webSearchEnabled: false,
     });
   });
 

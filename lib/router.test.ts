@@ -108,7 +108,7 @@ describe("model router", () => {
   it("falls back to a tool-capable model for explicit tool prompts", () => {
     const route = resolveModelRoute({
       availableToolCount: 2,
-      messages: [createUserMessage("Use MCP to fetch the GitHub issue.")],
+      messages: [createUserMessage("Use web search to fetch the GitHub issue.")],
       requestedModelId: "qwen/qwen3.5-27b",
     });
 
@@ -136,14 +136,14 @@ describe("model router", () => {
       },
       customModelId: "custom/omni-router",
       messages: [
-        createUserMessage("Use MCP and describe this image.", [
+        createUserMessage("Use tools and describe this image.", [
           {
             filename: "diagram.png",
             mediaType: "image/png",
             type: "file",
             url: "data:image/png;base64,abc",
           },
-          { type: "text", text: "Use MCP and describe this image." },
+          { type: "text", text: "Use tools and describe this image." },
         ]),
       ],
       requestedModelId: "custom/omni-router",

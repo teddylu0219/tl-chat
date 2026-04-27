@@ -78,6 +78,18 @@
       "resolvedAt": "2026-04-27T13:31:35+08:00",
       "status": "resolved",
       "summary": "The first screenshot capture grabbed Codex after the terminal command took focus; reactivated Zen and overwrote the screenshot with the correct app view."
+    },
+    {
+      "encounteredAt": "2026-04-27T14:25:40+08:00",
+      "resolvedAt": "2026-04-27T14:26:55+08:00",
+      "status": "resolved",
+      "summary": "A verification command used Jest's --runInBand flag, which Vitest rejects; reran the repository's standard npm test successfully."
+    },
+    {
+      "encounteredAt": "2026-04-27T14:34:00+08:00",
+      "resolvedAt": "2026-04-27T14:38:15+08:00",
+      "status": "resolved",
+      "summary": "Computer Use attempts to navigate the already-open Zen browser were interrupted by active page changes; used deterministic Playwright visual validation and screenshots instead."
     }
   ],
   "log": [
@@ -275,8 +287,13 @@
       "completedAt": "2026-04-27T13:32:04+08:00",
       "status": "completed",
       "task": "Added HEIC/HEIF JPEG preview conversion for chat thumbnails, removed visible fallback-route, header capability badge clutter, and MCP configure documentation from the composer, tightened Settings copy, captured screenshots/2026-04-27-heic-preview-clean-chat.png, manually verified the UI in Zen, and verified npm run lint, npm test, npm run build, and npm run test:e2e all pass."
+    },
+    {
+      "completedAt": "2026-04-27T14:40:11+08:00",
+      "status": "completed",
+      "task": "Replaced Settings MCP configuration with an explicit composer Web toggle backed by OpenRouter web_search/web_fetch server tools, hid tool activity cards, defaulted custom models to full capabilities, simplified memory-only backups, captured screenshots/2026-04-27-web-settings-clean.png and screenshots/2026-04-27-web-toggle-composer.png, and verified npm run lint, npm test, npm run build, and npm run test:e2e all pass."
     }
   ],
-  "nextTask": "Continue from TODO.md with conversation backup import/export, routing diagnostics, prompt templates, memory conflict detection, or MCP tool toggles.",
-  "updatedAt": "2026-04-27T13:32:04+08:00"
+  "nextTask": "Continue from TODO.md with conversation backup import/export, routing diagnostics, prompt templates, memory conflict detection, or Web answer source styling.",
+  "updatedAt": "2026-04-27T14:40:11+08:00"
 }

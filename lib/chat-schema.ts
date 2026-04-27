@@ -1,7 +1,6 @@
 import { validateUIMessages } from "ai";
 import { z } from "zod";
 
-import { mcpServerConfigSchema } from "./mcp";
 import { DEFAULT_MODEL_ID } from "./models";
 
 const customModelCapabilitiesSchema = z.object({
@@ -15,7 +14,6 @@ export const chatRequestSchema = z.object({
   apiKey: z.string().trim().min(12, "OpenRouter API key is required."),
   customModelCapabilities: customModelCapabilitiesSchema.default({}),
   customModelId: z.string().trim().optional(),
-  mcpServers: z.array(mcpServerConfigSchema).default([]),
   memories: z
     .array(
       z.object({
@@ -31,6 +29,7 @@ export const chatRequestSchema = z.object({
     .min(1, "A model is required.")
     .catch(DEFAULT_MODEL_ID),
   systemPrompt: z.string().optional(),
+  webSearchEnabled: z.boolean().default(false),
 });
 
 export type ChatRequest = z.infer<typeof chatRequestSchema>;

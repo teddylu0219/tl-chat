@@ -1,10 +1,7 @@
-import type { JSONSchema7 } from "@ai-sdk/provider";
 import {
   convertToModelMessages,
   createUIMessageStream,
   createUIMessageStreamResponse,
-  dynamicTool,
-  jsonSchema,
   stepCountIs,
   streamText,
   tool,
@@ -12,13 +9,6 @@ import {
 import { ZodError, z } from "zod";
 
 import { parseChatRequest } from "@/lib/chat-schema";
-import {
-  callMcpTool,
-  createMcpToolKey,
-  discoverMcpTools,
-  getActiveMcpServers,
-  type McpDiscoveryFailure,
-} from "@/lib/mcp";
 import {
   convertAttachmentDataPart,
   prepareMessagesForModel,
@@ -74,24 +64,30 @@ function getLastMessageText(
     .join("\n");
 }
 
-function buildCapabilityPrompt() {
+function buildCapabilityPrompt({
+  memoryToolsEnabled,
+  webSearchEnabled,
+}: {
+  memoryToolsEnabled: boolean;
+  webSearchEnabled: boolean;
+}) {
   return [
-    "Use tools when they help you answer more accurately.",
-    "If the user explicitly asks you to remember or forget something long-term, use the memory tools instead of only promising.",
+    memoryToolsEnabled
+      ? "Use tools when they help you answer more accurately."
+      : "",
+    webSearchEnabled
+      ? "Web is enabled. Use web search for current information and web fetch for explicit URLs before answering."
+      : "",
+    webSearchEnabled
+      ? "When Web sources are used, mention the most relevant source names or URLs naturally in the answer."
+      : "",
+    memoryToolsEnabled
+      ? "If the user explicitly asks you to remember or forget something long-term, use the memory tools instead of only promising."
+      : "",
     "Do not invent tool outputs. If a tool fails, say what failed and continue with the best fallback you can.",
-  ].join("\n");
-}
-
-function buildMcpDiscoveryPrompt(failures: McpDiscoveryFailure[]) {
-  if (failures.length === 0) {
-    return "";
-  }
-
-  return [
-    "Some MCP servers were unavailable during tool discovery.",
-    "If the user asks for a tool from one of these servers, briefly mention the failure and continue with available tools.",
-    ...failures.map((failure) => `- ${failure.serverName}: ${failure.message}`),
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function buildSearchMemoriesTool(
@@ -182,88 +178,19 @@ function buildCurrentTimeTool() {
   });
 }
 
-async function buildMcpTools(
-  servers: Awaited<ReturnType<typeof parseChatRequest>>["mcpServers"],
-) {
-  const activeServers = getActiveMcpServers(servers);
-
-  if (activeServers.length === 0) {
-    return {
-      failures: [],
-      tools: {},
-    };
-  }
-
-  const usedToolKeys = new Set<string>();
-  const discovered = await discoverMcpTools(activeServers);
-
-  return {
-    failures: discovered.failures,
-    tools: discovered.servers.reduce<Record<string, ReturnType<typeof dynamicTool>>>(
-      (toolSet, { server, tools }) => {
-        for (const mcpTool of tools) {
-          const toolKey = createMcpToolKey({
-            serverName: server.name,
-            toolName: mcpTool.name,
-            usedKeys: usedToolKeys,
-          });
-
-          toolSet[toolKey] = dynamicTool({
-            description:
-              [
-                `MCP tool from ${server.name}.`,
-                mcpTool.description?.trim(),
-              ]
-                .filter(Boolean)
-                .join(" "),
-            execute: async (args) => {
-              try {
-                const result = await callMcpTool({
-                  args: (args as Record<string, unknown>) ?? {},
-                  server,
-                  toolName: mcpTool.name,
-                });
-
-                return {
-                  content: result.text,
-                  isError: result.isError,
-                  server: server.name,
-                  structuredContent: result.structuredContent ?? null,
-                  tool: mcpTool.name,
-                };
-              } catch (error) {
-                return {
-                  content: getErrorMessage(error),
-                  isError: true,
-                  server: server.name,
-                  tool: mcpTool.name,
-                };
-              }
-            },
-            inputSchema: jsonSchema(mcpTool.inputSchema as JSONSchema7),
-            title: `${server.name}: ${mcpTool.title ?? mcpTool.name}`,
-          });
-        }
-
-        return toolSet;
-      },
-      {},
-    ),
-  };
-}
-
 export async function POST(request: Request) {
   try {
     const body = await parseChatRequest(await request.json());
-    const activeMcpServers = getActiveMcpServers(body.mcpServers);
     const route = resolveModelRoute({
-      availableToolCount: 4 + activeMcpServers.length,
+      availableToolCount: 4 + (body.webSearchEnabled ? 2 : 0),
       customModelCapabilities: body.customModelCapabilities,
       customModelId: body.customModelId,
       messages: body.messages,
       requestedModelId: body.modelId,
     });
-    const provider = createOpenRouterProvider(body.apiKey, request.url);
+    const provider = createOpenRouterProvider(body.apiKey, request.url, {
+      enabled: body.webSearchEnabled,
+    });
     const canUseTools = modelSupportsTools(
       route.modelId,
       body.customModelId,
@@ -280,22 +207,22 @@ export async function POST(request: Request) {
     if (process.env.OPENROUTER_MOCK_RESPONSE === "1") {
       return buildMockResponse(route.modelId, getLastMessageText(body.messages));
     }
-    const mcpToolDiscovery = canUseTools
-      ? await buildMcpTools(body.mcpServers)
-      : { failures: [], tools: {} };
     const tools = canUseTools
       ? {
           get_current_time: buildCurrentTimeTool(),
           search_memories: buildSearchMemoriesTool(body.memories),
           ...buildMemoryMutationTools(),
-          ...mcpToolDiscovery.tools,
         }
       : undefined;
     const fullSystemPrompt =
       [
         body.systemPrompt?.trim(),
-        canUseTools ? buildCapabilityPrompt() : "",
-        canUseTools ? buildMcpDiscoveryPrompt(mcpToolDiscovery.failures) : "",
+        canUseTools || body.webSearchEnabled
+          ? buildCapabilityPrompt({
+              memoryToolsEnabled: canUseTools,
+              webSearchEnabled: body.webSearchEnabled,
+            })
+          : "",
       ]
         .filter(Boolean)
         .join("\n\n") || undefined;

@@ -100,6 +100,13 @@ export const DEFAULT_MODEL_ID = FEATURED_MODELS[0].id;
 
 export const MODEL_OPTIONS = [AUTO_MODEL_OPTION, ...FEATURED_MODELS];
 
+export const DEFAULT_CUSTOM_MODEL_CAPABILITIES: Required<ModelCapabilityFlags> = {
+  supportsCode: true,
+  supportsImages: true,
+  supportsReasoning: true,
+  supportsTools: true,
+};
+
 export function getFeaturedModel(modelId: string) {
   return FEATURED_MODELS.find((model) => model.id === modelId);
 }
@@ -130,6 +137,7 @@ export function getModelOptions(
       provider: "Custom",
       blurb: trimmedCustomModelId,
       ...customModelCapabilities,
+      ...DEFAULT_CUSTOM_MODEL_CAPABILITIES,
     },
   ];
 }

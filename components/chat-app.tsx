@@ -221,15 +221,8 @@ function ChatAppInner() {
     await clearMemories();
     await Promise.all(backup.memories.map((memory) => saveMemory(memory)));
 
-    const nextSettings = await saveSettings({
-      mcpServers: backup.mcpServers,
-    });
-
     setMemories(backup.memories);
-    setSettings(nextSettings);
-    showToast(
-      `Imported ${backup.memories.length} memories and ${backup.mcpServers.length} MCP servers`,
-    );
+    showToast(`Imported ${backup.memories.length} memories`);
   }
 
   function getConversationMode(conversation: ConversationRecord | undefined | null) {
@@ -610,7 +603,6 @@ function ChatAppInner() {
                 customModelCapabilities={settings.customModelCapabilities}
                 customModelId={settings.customModelId}
                 memories={memories}
-                mcpServers={settings.mcpServers}
                 openRouterApiKey={settings.openRouterApiKey}
                 onApplyMemoryOperations={(operations) =>
                   void handleApplyMemoryOperations(operations)

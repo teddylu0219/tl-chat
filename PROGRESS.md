@@ -1,5 +1,32 @@
 # Progress
 
+## 2026-04-27T14:40:11+08:00
+
+Completed: Replaced Settings-based MCP configuration with a cleaner Web-first product path. The composer now has an explicit `Web` toggle that sends `webSearchEnabled` to `/api/chat`; when enabled, the OpenRouter request body is transformed to include `openrouter:web_search` and `openrouter:web_fetch` server tools. Tool invocation cards are hidden from assistant messages, while memory tool parts remain available for internal memory extraction. Settings no longer shows MCP server setup or custom model capability checkboxes; custom OpenRouter models default to all capabilities enabled, and backup export/import now covers memories only while ignoring legacy MCP fields.
+
+Verification:
+
+- `npm run lint`: passed.
+- `npm test`: passed, 13 files and 72 tests.
+- `npm run build`: passed.
+- `npm run test:e2e`: passed, 18 tests.
+- Playwright visual validation: passed. Confirmed Settings has no MCP text and no custom capability checkboxes, and confirmed the composer `Web` toggle switches `aria-pressed` to `true`.
+- Computer Use: attempted to operate the already-open Zen window, but the browser was actively changing pages during the session, so deterministic visual validation was completed with Playwright screenshots instead.
+
+Screenshots:
+
+- `screenshots/2026-04-27-web-settings-clean.png`: Settings panel after removing MCP configuration and custom model capability checkbox clutter.
+- `screenshots/2026-04-27-web-toggle-composer.png`: Composer with the new `Web` toggle enabled and no MCP documentation block.
+
+Findings:
+
+- AI SDK's OpenAI-compatible provider does not pass `provider-defined` tools through for this provider, so the robust path is a provider request-body transform that appends OpenRouter's documented server tools directly.
+- The old MCP settings path made a developer-oriented feature look like core product setup. A user-facing Web toggle covers the immediate real-world jobs: reading URLs, checking current facts, and answering GitHub/web questions.
+
+Resolved errors:
+
+- `npm test -- --runInBand` failed because Vitest does not support Jest's `--runInBand`; reran the repository's standard `npm test` successfully.
+
 ## 2026-04-27T13:32:04+08:00
 
 Completed: Reworked multimodal preview and reduced chat/settings UI copy so the product feels like a focused chat app instead of inline documentation. HEIC/HEIF images now get a browser-safe JPEG preview through `/api/attachment-preview`, pending and sent image attachments render real thumbnails when conversion succeeds, and fallback cards stay compact when preview conversion is unavailable. Removed the visible fallback route strip, header capability badge clutter, composer MCP explainer, and unnecessary attachment-limit copy from the main UI; route/model capability details remain available to assistive tech only. Settings copy was tightened so each section is labeled by action instead of long explanatory paragraphs.

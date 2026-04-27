@@ -5,21 +5,10 @@ import {
 } from "./settings-backup";
 
 describe("settings backup helpers", () => {
-  it("creates a versioned backup for memories and MCP servers", () => {
+  it("creates a versioned backup for memories", () => {
     expect(
       createSettingsBackup({
         exportedAt: "2026-04-25T00:00:00.000Z",
-        mcpServers: [
-          {
-            enabled: true,
-            headers: {
-              Authorization: "Bearer token",
-            },
-            id: "mcp_1",
-            name: "GitHub MCP",
-            url: "https://example.com/mcp",
-          },
-        ],
         memories: [
           {
             content: "User prefers concise answers.",
@@ -31,17 +20,6 @@ describe("settings backup helpers", () => {
       }),
     ).toEqual({
       exportedAt: "2026-04-25T00:00:00.000Z",
-      mcpServers: [
-        {
-          enabled: true,
-          headers: {
-            Authorization: "Bearer token",
-          },
-          id: "mcp_1",
-          name: "GitHub MCP",
-          url: "https://example.com/mcp",
-        },
-      ],
       memories: [
         {
           content: "User prefers concise answers.",
@@ -64,7 +42,28 @@ describe("settings backup helpers", () => {
       ),
     ).toEqual({
       exportedAt: "2026-04-25T00:00:00.000Z",
-      mcpServers: [],
+      memories: [],
+      version: SETTINGS_BACKUP_VERSION,
+    });
+  });
+
+  it("ignores legacy MCP server fields in old backup files", () => {
+    expect(
+      parseSettingsBackup({
+        exportedAt: "2026-04-25T00:00:00.000Z",
+        mcpServers: [
+          {
+            enabled: true,
+            headers: {},
+            id: "mcp_1",
+            name: "Legacy MCP",
+            url: "https://example.com/mcp",
+          },
+        ],
+        version: SETTINGS_BACKUP_VERSION,
+      }),
+    ).toEqual({
+      exportedAt: "2026-04-25T00:00:00.000Z",
       memories: [],
       version: SETTINGS_BACKUP_VERSION,
     });
@@ -81,15 +80,7 @@ describe("settings backup helpers", () => {
     expect(() =>
       parseSettingsBackup({
         exportedAt: "2026-04-25T00:00:00.000Z",
-        mcpServers: [
-          {
-            enabled: true,
-            headers: {},
-            id: "mcp_1",
-            name: "Broken MCP",
-            url: "not a url",
-          },
-        ],
+        memories: [{ content: "", createdAt: "", id: "", updatedAt: "" }],
         version: SETTINGS_BACKUP_VERSION,
       }),
     ).toThrow();

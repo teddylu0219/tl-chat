@@ -9,6 +9,7 @@ import {
   CornerDownRight,
   Copy,
   FileText,
+  Globe2,
   ImageIcon,
   LoaderCircle,
   Menu,
@@ -67,7 +68,6 @@ import {
   type ModelCapabilityFlags,
   type ModelOption,
 } from "@/lib/models";
-import type { McpServerConfig } from "@/lib/mcp";
 import type { ConversationRecord } from "@/lib/persistence";
 import { useSpeechRecognition } from "@/lib/use-speech-recognition";
 
@@ -76,7 +76,6 @@ type ConversationSessionProps = {
   customModelCapabilities: ModelCapabilityFlags;
   customModelId: string;
   memories: MemoryEntry[];
-  mcpServers: McpServerConfig[];
   onApplyMemoryOperations?: (operations: MemoryOperation[]) => void | Promise<void>;
   onConversationChange: (conversation: ConversationRecord) => void;
   onDeleteConversation: (conversation: ConversationRecord) => void;
@@ -108,10 +107,6 @@ function extractCodeLanguage(className?: string) {
   return match?.[1] ?? null;
 }
 
-function isToolPart(part: UIMessage["parts"][number]) {
-  return part.type === "dynamic-tool" || part.type.startsWith("tool-");
-}
-
 function getRouteMetadata(message?: UIMessage): RouteMetadata | null {
   const metadata = message?.metadata as RouteMetadata | undefined;
 
@@ -120,22 +115,6 @@ function getRouteMetadata(message?: UIMessage): RouteMetadata | null {
   }
 
   return metadata;
-}
-
-function getToolDisplayName(part: UIMessage["parts"][number]) {
-  if (!isToolPart(part)) {
-    return null;
-  }
-
-  if ("title" in part && typeof part.title === "string" && part.title.trim()) {
-    return part.title;
-  }
-
-  if (part.type === "dynamic-tool") {
-    return part.toolName;
-  }
-
-  return part.type.replace(/^tool-/, "").replace(/_/g, " ");
 }
 
 async function requestMemoryOperations({
@@ -436,76 +415,6 @@ function ThinkingIndicator() {
   );
 }
 
-function formatToolPayload(value: unknown) {
-  if (value == null) {
-    return "";
-  }
-
-  if (typeof value === "string") {
-    return value;
-  }
-
-  if (isRecord(value) && typeof value.content === "string") {
-    const sections = [value.content.trim()].filter(Boolean);
-
-    if (value.structuredContent) {
-      sections.push(
-        [
-          "Structured content:",
-          formatToolPayload(value.structuredContent),
-        ].join("\n"),
-      );
-    }
-
-    return sections.join("\n\n");
-  }
-
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function formatToolStateLabel(state?: string) {
-  if (!state) {
-    return "Queued";
-  }
-
-  if (state.includes("error")) {
-    return "Failed";
-  }
-
-  if (state.includes("output")) {
-    return "Done";
-  }
-
-  if (state.includes("input")) {
-    return "Calling";
-  }
-
-  return state.replace(/-/g, " ");
-}
-
-function getToolStatus(part: UIMessage["parts"][number]) {
-  const output = "output" in part ? part.output : undefined;
-  const hasErrorText = "errorText" in part && Boolean(part.errorText);
-  const hasErrorOutput = isRecord(output) && output.isError === true;
-  const state = "state" in part && typeof part.state === "string"
-    ? part.state
-    : undefined;
-  const isError = hasErrorText || hasErrorOutput || state?.includes("error");
-
-  return {
-    isError,
-    label: isError ? "Failed" : formatToolStateLabel(state),
-  };
-}
-
 function formatMediaTypeLabel(mediaType: string) {
   return mediaType.replace(/^image\//, "").replace(/\+xml$/, "").toUpperCase();
 }
@@ -724,61 +633,6 @@ function MessageAttachments({ message }: { message: UIMessage }) {
   );
 }
 
-function ToolActivityList({ message }: { message: UIMessage }) {
-  const toolParts = message.parts.filter(isToolPart);
-
-  if (toolParts.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="mb-3 space-y-2">
-      {toolParts.map((part, index) => {
-        const status = getToolStatus(part);
-        const payload =
-          "output" in part && part.output !== undefined
-            ? formatToolPayload(part.output)
-            : "errorText" in part && part.errorText
-              ? part.errorText
-              : "input" in part
-                ? formatToolPayload(part.input)
-                : "";
-
-        return (
-          <div
-            key={`${part.type}-${"toolCallId" in part ? part.toolCallId : index}`}
-            className={`rounded-[18px] border px-4 py-3 ${
-              status.isError
-                ? "border-[color:var(--danger)]/30 bg-[color:var(--surface-strong)]"
-                : "border-[color:var(--border)] bg-[color:var(--surface-muted)]"
-            }`}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-[11px] uppercase tracking-[0.22em] text-[color:var(--muted-foreground)]">
-                {getToolDisplayName(part)}
-              </p>
-              <span
-                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] ${
-                  status.isError
-                    ? "bg-[color:var(--danger)]/10 text-[color:var(--danger)]"
-                    : "bg-[color:var(--surface-strong)] text-[color:var(--muted-foreground)]"
-                }`}
-              >
-                {status.label}
-              </span>
-            </div>
-            {payload ? (
-              <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-words text-[12px] leading-6 text-[color:var(--foreground)]">
-                {payload}
-              </pre>
-            ) : null}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 function MessageBubble({
   message,
   modelLabel,
@@ -838,7 +692,6 @@ function MessageBubble({
           </span>
         ) : null}
         <MessageAttachments message={message} />
-        {!isUser ? <ToolActivityList message={message} /> : null}
         <MarkdownMessage
           mode={isStreaming ? "streaming" : "rich"}
           text={text}
@@ -872,7 +725,6 @@ export function ConversationSession({
   customModelCapabilities,
   customModelId,
   memories,
-  mcpServers,
   onApplyMemoryOperations,
   onConversationChange,
   onDeleteConversation,
@@ -890,6 +742,7 @@ export function ConversationSession({
   const [modelId, setModelId] = useState(conversation.modelId);
   const [pendingAttachments, setPendingAttachments] = useState<ComposerAttachment[]>([]);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const isAutoScrolling = useRef(false);
   const isNearBottom = useRef(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1090,9 +943,6 @@ export function ConversationSession({
     modelOptions[0];
   const activeError = gateError ?? error?.message ?? (speechError || null);
   const isStreaming = status === "streaming" || status === "submitted";
-  const activeMcpServerCount = mcpServers.filter(
-    (server) => server.enabled && server.url.trim(),
-  ).length;
 
   // Build system prompt from memories
   const systemPrompt = formatMemoriesAsSystemPrompt(memories);
@@ -1165,13 +1015,13 @@ export function ConversationSession({
             apiKey: openRouterApiKey.trim(),
             customModelCapabilities,
             customModelId: customModelId || undefined,
-            mcpServers,
             memories: memories.map((memory) => ({
               content: memory.content,
               id: memory.id,
             })),
             modelId,
             systemPrompt: systemPrompt || undefined,
+            webSearchEnabled,
           },
         },
       );
@@ -1194,13 +1044,13 @@ export function ConversationSession({
         apiKey: openRouterApiKey.trim(),
         customModelCapabilities,
         customModelId: customModelId || undefined,
-        mcpServers,
         memories: memories.map((memory) => ({
           content: memory.content,
           id: memory.id,
         })),
         modelId,
         systemPrompt: systemPrompt || undefined,
+        webSearchEnabled,
       },
     });
   }
@@ -1231,13 +1081,13 @@ export function ConversationSession({
             apiKey: openRouterApiKey.trim(),
             customModelCapabilities,
             customModelId: customModelId || undefined,
-            mcpServers,
             memories: memories.map((memory) => ({
               content: memory.content,
               id: memory.id,
             })),
             modelId,
             systemPrompt: systemPrompt || undefined,
+            webSearchEnabled,
           },
         },
       );
@@ -1249,13 +1099,13 @@ export function ConversationSession({
         apiKey: openRouterApiKey.trim(),
         customModelCapabilities,
         customModelId: customModelId || undefined,
-        mcpServers,
         memories: memories.map((memory) => ({
           content: memory.content,
           id: memory.id,
         })),
         modelId,
         systemPrompt: systemPrompt || undefined,
+        webSearchEnabled,
       },
     });
   }
@@ -1539,12 +1389,9 @@ export function ConversationSession({
               <span className="rounded-full bg-[color:var(--surface-muted)] px-2 py-1">
                 {currentModel.label}
               </span>
-              <span className="rounded-full bg-[color:var(--surface-muted)] px-2 py-1">
-                {isStreaming ? "Streaming" : "Saved"}
-              </span>
-              {currentModel.supportsTools ? (
+              {webSearchEnabled ? (
                 <span className="rounded-full bg-[color:var(--surface-muted)] px-2 py-1">
-                  Tools
+                  Web on
                 </span>
               ) : null}
               {memories.length > 0 ? (
@@ -1552,14 +1399,23 @@ export function ConversationSession({
                   {memories.length} mem
                 </span>
               ) : null}
-              {activeMcpServerCount > 0 ? (
-                <span className="rounded-full bg-[color:var(--surface-muted)] px-2 py-1">
-                  {activeMcpServerCount} MCP
-                </span>
-              ) : null}
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                aria-pressed={webSearchEnabled}
+                className={`flex h-9 items-center gap-1.5 rounded-full px-3 text-[13px] transition ${
+                  webSearchEnabled
+                    ? "bg-[color:var(--accent)] text-white shadow-[0_8px_18px_rgba(122,96,73,0.18)]"
+                    : "text-[color:var(--muted-foreground)] hover:bg-[color:var(--surface-muted)] hover:text-[color:var(--foreground)]"
+                }`}
+                data-testid="web-search-toggle"
+                type="button"
+                onClick={() => setWebSearchEnabled((enabled) => !enabled)}
+              >
+                <Globe2 className="h-4 w-4" />
+                Web
+              </button>
               <button
                 aria-label="Attach files"
                 aria-describedby={COMPOSER_ATTACHMENT_HELP_ID}

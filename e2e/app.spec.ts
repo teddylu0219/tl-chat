@@ -53,29 +53,16 @@ test("discards canceled settings drafts and persists saved settings", async ({
   await expect(page.getByTestId("api-key-input")).toHaveValue("sk-or-v1-saved-key");
 });
 
-test("persists custom model capability settings", async ({ page }) => {
+test("keeps custom model settings simple and defaults capabilities on", async ({
+  page,
+}) => {
   await page.goto("/");
 
   await page.getByTestId("header-settings-button").click();
   await expect(page.getByTestId("settings-panel")).toBeVisible();
 
-  const supportsImages = page.getByTestId(
-    "custom-model-capability-supportsImages",
-  );
-  const supportsTools = page.getByTestId(
-    "custom-model-capability-supportsTools",
-  );
-  const supportsReasoning = page.getByTestId(
-    "custom-model-capability-supportsReasoning",
-  );
-  const supportsCode = page.getByTestId("custom-model-capability-supportsCode");
-
-  await expect(supportsImages).toBeDisabled();
   await page.getByLabel("Custom model id").fill("custom/omni-router");
-  await supportsImages.check();
-  await supportsTools.check();
-  await supportsCode.check();
-  await expect(supportsReasoning).not.toBeChecked();
+  await expect(page.getByTestId(/^custom-model-capability-/)).toHaveCount(0);
 
   await page.getByTestId("save-settings-button").click();
 
@@ -84,18 +71,7 @@ test("persists custom model capability settings", async ({ page }) => {
   await expect(page.getByLabel("Custom model id")).toHaveValue(
     "custom/omni-router",
   );
-  await expect(
-    page.getByTestId("custom-model-capability-supportsImages"),
-  ).toBeChecked();
-  await expect(
-    page.getByTestId("custom-model-capability-supportsTools"),
-  ).toBeChecked();
-  await expect(
-    page.getByTestId("custom-model-capability-supportsCode"),
-  ).toBeChecked();
-  await expect(
-    page.getByTestId("custom-model-capability-supportsReasoning"),
-  ).not.toBeChecked();
+  await expect(page.getByTestId(/^custom-model-capability-/)).toHaveCount(0);
 
   await page.getByRole("button", { name: "Cancel" }).click();
   await page.getByTestId("model-select").selectOption("custom/omni-router");
@@ -104,7 +80,7 @@ test("persists custom model capability settings", async ({ page }) => {
   await expect(activeCapabilities).toContainText("Vision");
   await expect(activeCapabilities).toContainText("Tools");
   await expect(activeCapabilities).toContainText("Code");
-  await expect(activeCapabilities).not.toContainText("Reasoning");
+  await expect(activeCapabilities).toContainText("Reasoning");
 });
 
 test("renders HEIC previews and keeps the composer quiet", async ({
@@ -155,63 +131,35 @@ test("renders HEIC previews and keeps the composer quiet", async ({
   );
 });
 
-test("tests MCP server connections from unsaved settings drafts", async ({
+test("sends web-enabled chat requests from the composer toggle", async ({
   page,
 }) => {
-  let requestCount = 0;
-  let requestedPayload: {
-    server?: {
-      headers?: Record<string, string>;
-      name?: string;
-      url?: string;
-    };
-  } | null = null;
+  let capturedRequest: { webSearchEnabled?: boolean } | null = null;
 
-  await page.route("**/api/mcp-test", async (route) => {
-    requestCount += 1;
-    requestedPayload = route.request().postDataJSON() as typeof requestedPayload;
-    await route.fulfill({
-      body: JSON.stringify({
-        message: "Connected. Found 2 tools.",
-        ok: true,
-        toolCount: 2,
-        tools: ["get_issue", "search"],
-      }),
-      contentType: "application/json",
-      status: 200,
-    });
+  await page.route("**/api/chat", async (route) => {
+    capturedRequest = route.request().postDataJSON() as typeof capturedRequest;
+    await route.continue();
   });
 
   await page.goto("/");
-  await page.getByTestId("header-settings-button").click();
-  await page.getByRole("button", { name: "Add server" }).click();
-  await page.getByPlaceholder("GitHub MCP").fill("Fixture MCP");
-  await page.getByPlaceholder("https://example.com/mcp").fill("https://example.com/mcp");
-  await page
-    .locator('textarea[placeholder*="Authorization"]')
-    .fill(JSON.stringify({ Authorization: "Bearer test-token" }, null, 2));
+  await configureLocalKey(page);
 
-  await page.getByRole("button", { name: "Test" }).click();
+  const webToggle = page.getByTestId("web-search-toggle");
+  await expect(webToggle).toHaveAttribute("aria-pressed", "false");
+  await webToggle.click();
+  await expect(webToggle).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText("Web on")).toBeVisible();
 
-  await expect(page.getByText("Connected. Found 2 tools.")).toBeVisible();
-  expect(requestedPayload).toMatchObject({
-    server: {
-      headers: {
-        Authorization: "Bearer test-token",
-      },
-      name: "Fixture MCP",
-      url: "https://example.com/mcp",
-    },
-  });
+  await page.getByTestId("composer-input").fill("今天的黃金價格是多少？");
+  await page.getByTestId("send-button").click();
 
-  await page.locator('textarea[placeholder*="Authorization"]').fill("{bad-json");
-  await page.getByRole("button", { name: "Test" }).click();
-
-  await expect(page.getByText("MCP headers must be valid JSON.")).toBeVisible();
-  expect(requestCount).toBe(1);
+  await expect(page.getByTestId("message-assistant").last()).toContainText(
+    "今天的黃金價格是多少？",
+  );
+  expect(capturedRequest).toMatchObject({ webSearchEnabled: true });
 });
 
-test("exports memories and MCP settings without the OpenRouter key", async ({
+test("exports memories without the OpenRouter key", async ({
   page,
 }) => {
   await page.goto("/");
@@ -219,10 +167,6 @@ test("exports memories and MCP settings without the OpenRouter key", async ({
   await configureLocalKey(page);
   await sendPrompt(page, "i am a student from nycu");
   await page.getByRole("button", { name: "Review memory" }).click();
-
-  await page.getByRole("button", { name: "Add server" }).click();
-  await page.getByPlaceholder("GitHub MCP").fill("Fixture MCP");
-  await page.getByPlaceholder("https://example.com/mcp").fill("https://example.com/mcp");
 
   const downloadPromise = page.waitForEvent("download");
   await page.getByTestId("export-settings-backup-button").click();
@@ -233,7 +177,7 @@ test("exports memories and MCP settings without the OpenRouter key", async ({
   expect(downloadPath).toBeTruthy();
 
   const backup = JSON.parse(await readFile(downloadPath!, "utf8")) as {
-    mcpServers: Array<{ name: string; url: string }>;
+    mcpServers?: unknown;
     memories: Array<{ content: string }>;
     openRouterApiKey?: string;
     version: number;
@@ -246,15 +190,10 @@ test("exports memories and MCP settings without the OpenRouter key", async ({
       content: "User is a student from NYCU",
     }),
   ]);
-  expect(backup.mcpServers).toEqual([
-    expect.objectContaining({
-      name: "Fixture MCP",
-      url: "https://example.com/mcp",
-    }),
-  ]);
+  expect(backup.mcpServers).toBeUndefined();
 });
 
-test("imports memories and MCP settings while preserving the OpenRouter key", async ({
+test("imports memories while preserving the OpenRouter key", async ({
   page,
 }) => {
   await page.goto("/");
@@ -292,16 +231,11 @@ test("imports memories and MCP settings while preserving the OpenRouter key", as
     name: "tl-chat-settings.json",
   });
 
-  await expect(
-    page.getByText("Imported 1 memories and 1 MCP servers"),
-  ).toBeVisible();
+  await expect(page.getByText("Imported 1 memories")).toBeVisible();
   await expect(
     page.getByText("User prefers imported backups.", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByPlaceholder("GitHub MCP")).toHaveValue("Imported MCP");
-  await expect(
-    page.getByPlaceholder("https://example.com/mcp"),
-  ).toHaveValue("https://imported.example.com/mcp");
+  await expect(page.getByText("Imported MCP")).toHaveCount(0);
   await expect(page.getByTestId("api-key-input")).toHaveValue(
     "sk-or-v1-playwright-local-key",
   );
@@ -311,7 +245,7 @@ test("imports memories and MCP settings while preserving the OpenRouter key", as
   await expect(
     page.getByText("User prefers imported backups.", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByPlaceholder("GitHub MCP")).toHaveValue("Imported MCP");
+  await expect(page.getByText("Imported MCP")).toHaveCount(0);
 });
 
 test("rejects invalid settings backup imports without changing local settings", async ({
@@ -338,15 +272,6 @@ test("rejects invalid settings backup imports without changing local settings", 
 
   const invalidBackup = {
     exportedAt: "not-a-date",
-    mcpServers: [
-      {
-        enabled: true,
-        headers: {},
-        id: "rejected_mcp",
-        name: "Rejected MCP",
-        url: "https://rejected.example.com/mcp",
-      },
-    ],
     memories: [
       {
         content: "Should not import this invalid backup.",
@@ -373,7 +298,6 @@ test("rejects invalid settings backup imports without changing local settings", 
       exact: true,
     }),
   ).toHaveCount(0);
-  await expect(settingsPanel.getByText("Rejected MCP")).toHaveCount(0);
 });
 
 test("renames a thread and keeps it after refresh", async ({ page }) => {

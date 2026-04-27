@@ -5,6 +5,10 @@ import { APP_NAME } from "./app-config";
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const LOCAL_FALLBACK_ORIGIN = "http://localhost:3000";
 
+type OpenRouterWebToolOptions = {
+  enabled?: boolean;
+};
+
 export class RequestValidationError extends Error {
   constructor(message: string) {
     super(message);
@@ -12,7 +16,40 @@ export class RequestValidationError extends Error {
   }
 }
 
-export function createOpenRouterProvider(apiKey: string, requestUrl?: string) {
+export function appendOpenRouterWebTools(requestBody: Record<string, unknown>) {
+  const existingTools = Array.isArray(requestBody.tools)
+    ? requestBody.tools
+    : [];
+
+  return {
+    ...requestBody,
+    tool_choice: requestBody.tool_choice ?? "auto",
+    tools: [
+      ...existingTools,
+      {
+        parameters: {
+          max_results: 5,
+          max_total_results: 10,
+          search_context_size: "medium",
+        },
+        type: "openrouter:web_search",
+      },
+      {
+        parameters: {
+          max_content_tokens: 50_000,
+          max_uses: 5,
+        },
+        type: "openrouter:web_fetch",
+      },
+    ],
+  };
+}
+
+export function createOpenRouterProvider(
+  apiKey: string,
+  requestUrl?: string,
+  webTools?: OpenRouterWebToolOptions,
+) {
   const origin = requestUrl ? new URL(requestUrl).origin : LOCAL_FALLBACK_ORIGIN;
 
   return createOpenAICompatible({
@@ -23,6 +60,9 @@ export function createOpenRouterProvider(apiKey: string, requestUrl?: string) {
       "X-Title": APP_NAME,
     },
     name: "openrouter",
+    transformRequestBody: webTools?.enabled
+      ? appendOpenRouterWebTools
+      : undefined,
   });
 }
 

@@ -6,7 +6,7 @@
 - [ ] Add per-model routing diagnostics explaining why Auto Router chose or rejected a model.
 - [ ] Add saved prompt templates for common daily-driver workflows.
 - [ ] Add memory conflict detection before applying automatic memory updates.
-- [ ] Add MCP tool allow/deny toggles per server in Settings.
+- [ ] Add source citations/summary styling for Web answers without exposing raw tool events.
 
 ## Done
 
@@ -28,3 +28,4 @@
 - [x] Add conversation search result highlighting and jump-to-thread keyboard support.
 - [x] Fix real OpenRouter image uploads, HEIC fallback previews, and Tools/MCP composer guidance.
 - [x] Add real HEIC previews and simplify chat/settings UI copy.
+- [x] Replace Settings MCP configuration with a composer Web toggle backed by OpenRouter web search/fetch tools.

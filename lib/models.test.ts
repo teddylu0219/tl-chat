@@ -41,26 +41,23 @@ describe("model registry", () => {
       .toBeTruthy();
   });
 
-  it("applies custom model capability flags", () => {
+  it("treats custom models as fully capable by default", () => {
     const options = getModelOptions("meta-llama/llama-custom", {
-      supportsImages: true,
-      supportsTools: true,
+      supportsImages: false,
+      supportsTools: false,
     });
 
     expect(options.at(-1)).toMatchObject({
       id: "meta-llama/llama-custom",
       supportsImages: true,
+      supportsReasoning: true,
       supportsTools: true,
     });
     expect(
-      modelSupportsImages("meta-llama/llama-custom", "meta-llama/llama-custom", {
-        supportsImages: true,
-      }),
+      modelSupportsImages("meta-llama/llama-custom", "meta-llama/llama-custom"),
     ).toBe(true);
     expect(
-      modelSupportsTools("meta-llama/llama-custom", "meta-llama/llama-custom", {
-        supportsTools: true,
-      }),
+      modelSupportsTools("meta-llama/llama-custom", "meta-llama/llama-custom"),
     ).toBe(true);
   });
 
