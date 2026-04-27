@@ -1,5 +1,34 @@
 # Progress
 
+## 2026-04-27T13:12:00+08:00
+
+Completed: Fixed the real OpenRouter multimodal failure and clarified the tool/MCP experience. Browser `data:` image attachments are now converted server-side into AI SDK file bytes before model calls, so OpenRouter no longer rejects them with `URL scheme must be http or https, got data:`. HEIC and other browser-unsupported image formats now render a clear attachment card instead of an empty frame. The composer now explains that built-in tools run automatically and that MCP servers are configured in Settings.
+
+Verification:
+
+- `npm test -- lib/model-message-parts.test.ts`: passed, 4 tests.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm test`: passed, 12 files and 70 tests.
+- `npm run test:e2e`: passed, 18 tests.
+- Computer Use manual test with the already-open Zen browser: passed. Retried the existing `IMG_3547.HEIC` prompt against real OpenRouter; the route fell back to Gemini 2.5 Flash, the previous `data:` URL error disappeared, and the model answered that the image shows a pack of tissue/paper.
+- Computer Use manual tool test with real OpenRouter: passed. Sent `請使用工具告訴我台北現在時間，並用一句話回答。`; the UI showed `GET CURRENT TIME` with `DONE` status and the assistant returned the Taipei time in Chinese.
+
+Screenshots:
+
+- `screenshots/2026-04-27-1311-tool-time-openrouter.png`: Browser validation showing the built-in time tool card and assistant answer after the Tools/MCP guide change.
+
+Findings:
+
+- The failing image path was not routing; routing correctly selected Gemini for vision. The actual bug was that UI file parts persisted browser `data:` URLs and `convertToModelMessages` passed those URLs through to the OpenRouter-compatible provider.
+- HEIC can be attached and sent to vision-capable providers, but common browsers cannot preview it with `<img>`, so the UI must show a fallback card rather than treating preview failure as upload failure.
+- Tool use was technically working, but the composer did not explain the automatic behavior or the difference between built-in tools and configured MCP servers.
+
+Resolved errors:
+
+- `playwright` was not on the shell PATH for a targeted rerun after `npm run build`; used `npx --no-install playwright test ...` for the focused check, then reran `npm run test:e2e`.
+- Initial `screencapture` failed with `could not create image from display`; after Computer Use permission was granted, reran screenshot capture successfully.
+
 ## 2026-04-25T03:43:48+08:00
 
 Completed: Added conversation search result highlighting and keyboard jump support. Search results now mark visible title/preview matches, show a result count with an Enter hint, let ArrowDown move focus from the search box to the first result, and let Enter open the first result. Search-result action menus now keep pin/unpin available.

@@ -48,6 +48,24 @@
       "resolvedAt": "2026-04-25T03:43:48+08:00",
       "status": "resolved",
       "summary": "The Playwright CLI wrapper attempted to fetch @playwright/cli from npm under restricted network access; used the repository-installed playwright package directly for screenshot capture."
+    },
+    {
+      "encounteredAt": "2026-04-27T13:07:59+08:00",
+      "resolvedAt": "2026-04-27T13:08:25+08:00",
+      "status": "resolved",
+      "summary": "The new HEIC Playwright check selected both the composer file input and Settings backup import input; added a composer-file-input test id and narrowed the locator."
+    },
+    {
+      "encounteredAt": "2026-04-27T13:08:37+08:00",
+      "resolvedAt": "2026-04-27T13:08:49+08:00",
+      "status": "resolved",
+      "summary": "A targeted Playwright rerun failed because playwright was not on the shell PATH after npm run build; used npx --no-install playwright for the focused check, then reran npm run test:e2e."
+    },
+    {
+      "encounteredAt": "2026-04-27T13:09:42+08:00",
+      "resolvedAt": "2026-04-27T13:11:55+08:00",
+      "status": "resolved",
+      "summary": "Initial screencapture failed with 'could not create image from display'; after Computer Use permission was granted, screenshot capture succeeded."
     }
   ],
   "log": [
@@ -235,8 +253,13 @@
       "completedAt": "2026-04-25T03:43:48+08:00",
       "status": "completed",
       "task": "Added conversation search highlighting, result count and keyboard hint, ArrowDown focus from search to first result, Enter jump-to-first-result support, preserved pin actions in search results, captured screenshots/2026-04-25-0336-search-highlight.png, and verified npm test, npm run lint, npm run build, and npm run test:e2e all pass."
+    },
+    {
+      "completedAt": "2026-04-27T13:12:00+08:00",
+      "status": "completed",
+      "task": "Fixed real OpenRouter image upload conversion by turning browser data URL image attachments into model file bytes, added HEIC fallback preview cards, clarified Tools/MCP composer guidance, captured screenshots/2026-04-27-1311-tool-time-openrouter.png, manually verified image retry and get_current_time tool use in Zen, and verified npm test, npm run lint, npm run build, and npm run test:e2e all pass."
     }
   ],
   "nextTask": "Continue from TODO.md with conversation backup import/export, routing diagnostics, prompt templates, memory conflict detection, or MCP tool toggles.",
-  "updatedAt": "2026-04-25T03:43:48+08:00"
+  "updatedAt": "2026-04-27T13:12:00+08:00"
 }

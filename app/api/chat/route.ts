@@ -19,6 +19,10 @@ import {
   getActiveMcpServers,
   type McpDiscoveryFailure,
 } from "@/lib/mcp";
+import {
+  convertAttachmentDataPart,
+  prepareMessagesForModel,
+} from "@/lib/model-message-parts";
 import { getModelOption, modelSupportsTools } from "@/lib/models";
 import { createOpenRouterProvider, getErrorMessage, getErrorStatus } from "@/lib/openrouter";
 import { resolveModelRoute } from "@/lib/router";
@@ -266,33 +270,16 @@ export async function POST(request: Request) {
       body.customModelCapabilities,
     );
 
+    const modelMessages = await convertToModelMessages(
+      prepareMessagesForModel(body.messages.map(omitMessageId)),
+      {
+        convertDataPart: convertAttachmentDataPart,
+      },
+    );
+
     if (process.env.OPENROUTER_MOCK_RESPONSE === "1") {
       return buildMockResponse(route.modelId, getLastMessageText(body.messages));
     }
-
-    const modelMessages = await convertToModelMessages(body.messages.map(omitMessageId), {
-      convertDataPart: (part) => {
-        if (part.type !== "data-attachment-text") {
-          return undefined;
-        }
-
-        const attachment = part.data as {
-          filename: string;
-          mediaType: string;
-          text: string;
-        };
-
-        return {
-          text: [
-            `Attached document: ${attachment.filename}`,
-            `Media type: ${attachment.mediaType}`,
-            "",
-            attachment.text,
-          ].join("\n"),
-          type: "text" as const,
-        };
-      },
-    });
     const mcpToolDiscovery = canUseTools
       ? await buildMcpTools(body.mcpServers)
       : { failures: [], tools: {} };

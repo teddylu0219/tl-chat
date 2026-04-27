@@ -32,10 +32,30 @@ export function getErrorMessage(error: unknown) {
   }
 
   if (error instanceof Error && error.message) {
-    return error.message;
+    return formatOpenRouterError(error.message);
   }
 
   return "Something went wrong while contacting OpenRouter.";
+}
+
+function formatOpenRouterError(message: string) {
+  if (/URL scheme must be http or https, got data:/i.test(message)) {
+    return "Image upload was rejected because the provider received a browser data URL instead of image bytes. Retry the message; if it still fails, convert HEIC to PNG/JPEG or choose a vision-capable model.";
+  }
+
+  if (/(unauthorized|invalid api key|401|403)/i.test(message)) {
+    return "OpenRouter rejected the API key. Review the key in Settings, then retry.";
+  }
+
+  if (/(rate limit|too many requests|429)/i.test(message)) {
+    return "OpenRouter rate-limited this request. Wait a moment or choose a cheaper/faster model, then retry.";
+  }
+
+  if (/(no content generated|no output generated|returned no response)/i.test(message)) {
+    return "The model returned no visible output. Retry once; if it repeats, switch models or simplify the prompt.";
+  }
+
+  return message;
 }
 
 export function getErrorStatus(error: unknown) {

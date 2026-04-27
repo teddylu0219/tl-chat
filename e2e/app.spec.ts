@@ -107,6 +107,45 @@ test("persists custom model capability settings", async ({ page }) => {
   await expect(activeCapabilities).not.toContainText("Reasoning");
 });
 
+test("keeps HEIC attachments visible and explains automatic tools", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await configureLocalKey(page);
+
+  await expect(page.getByTestId("tool-mcp-guide")).toContainText(
+    "Tools & MCP are automatic",
+  );
+  await expect(page.getByTestId("tool-mcp-guide")).toContainText(
+    "Built-in memory and time tools",
+  );
+
+  await page.getByTestId("composer-file-input").setInputFiles({
+    buffer: Buffer.from("fake-heic-bytes"),
+    mimeType: "image/heic",
+    name: "IMG_3547.HEIC",
+  });
+
+  await expect(page.getByTestId("pending-attachment")).toContainText(
+    "IMG_3547.HEIC",
+  );
+  await expect(page.getByTestId("pending-attachment")).toContainText(
+    "browser preview unavailable",
+  );
+
+  await page.getByTestId("composer-input").fill("這是什麼");
+  await page.getByTestId("send-button").click();
+
+  const userMessage = page.getByTestId("message-user").last();
+  await expect(userMessage.getByTestId("message-image-attachment")).toContainText(
+    "Preview unavailable. Still attached.",
+  );
+  await expect(userMessage).toContainText("這是什麼");
+  await expect(page.getByTestId("message-assistant").last()).toContainText(
+    "Mock reply from google/gemini-2.5-flash",
+  );
+});
+
 test("tests MCP server connections from unsaved settings drafts", async ({
   page,
 }) => {

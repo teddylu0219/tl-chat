@@ -23,6 +23,9 @@ Status: in progress.
 - Surface model capabilities directly in chat and council model controls, including routed assistant metadata chips.
 - Add safer memory review and conflict handling. Automatic memory updates now expose a review action that opens settings.
 - Make multimodal limits understandable before upload. Composer attachment help text now lists limits and supported text-like file families.
+- Make real OpenRouter multimodal requests robust by converting browser data URL image attachments into model file bytes before provider calls.
+- Keep unsupported browser image formats, including HEIC, visible with explicit "preview unavailable but attached" UI instead of blank frames.
+- Clarify that built-in tools run automatically and MCP servers are configured in Settings, with visible composer guidance and status chips.
 - Record screenshots in `screenshots/` when UI changes are visually validated.
 
 ## Milestone 3: Expand Agentic Workflows

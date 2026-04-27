@@ -89,6 +89,7 @@ type ConversationSessionProps = {
 
 const CHAT_STREAM_THROTTLE_MS = 120;
 const COMPOSER_ATTACHMENT_HELP_ID = "composer-attachment-help";
+const COMPOSER_TOOL_GUIDE_ID = "composer-tool-guide";
 const IMAGE_ATTACHMENT_LIMIT_MB = MAX_IMAGE_ATTACHMENT_BYTES / 1024 / 1024;
 const LARGE_MESSAGE_RICH_RENDER_THRESHOLD = 2400;
 const TEXT_ATTACHMENT_LIMIT_LABEL = `${Math.round(MAX_TEXT_ATTACHMENT_CHARS / 1000)}k`;
@@ -516,9 +517,152 @@ function getToolStatus(part: UIMessage["parts"][number]) {
   };
 }
 
+function formatMediaTypeLabel(mediaType: string) {
+  return mediaType.replace(/^image\//, "").replace(/\+xml$/, "").toUpperCase();
+}
+
+function canPreviewImageInBrowser(mediaType: string) {
+  return /^image\/(?:png|jpe?g|gif|webp|avif|svg\+xml)$/i.test(mediaType);
+}
+
+function ImageAttachmentPreview({
+  filename,
+  mediaType,
+  tone,
+  url,
+}: Readonly<{
+  filename?: string;
+  mediaType: string;
+  tone: "default" | "inverse";
+  url: string;
+}>) {
+  const [previewFailed, setPreviewFailed] = useState(
+    !canPreviewImageInBrowser(mediaType),
+  );
+  const label = filename ?? "Uploaded image";
+  const isInverse = tone === "inverse";
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      download={url.startsWith("data:") ? label : undefined}
+      className={`group/attachment overflow-hidden rounded-[18px] border transition ${
+        isInverse
+          ? "border-white/18 bg-white/10 text-white hover:bg-white/14"
+          : "border-[color:var(--border)] bg-[color:var(--surface-muted)] text-[color:var(--foreground)] hover:border-[color:var(--border-strong)]"
+      }`}
+      data-testid="message-image-attachment"
+      title={
+        previewFailed
+          ? `${label} is attached, but this browser cannot preview ${mediaType}.`
+          : label
+      }
+    >
+      {!previewFailed ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          alt={label}
+          className="h-28 w-28 object-cover"
+          src={url}
+          onError={() => setPreviewFailed(true)}
+        />
+      ) : (
+        <div className="flex h-28 w-36 flex-col justify-between p-3">
+          <div className="flex items-center justify-between gap-2">
+            <ImageIcon className="h-4 w-4 opacity-80" />
+            <span
+              className={`rounded-full px-2 py-0.5 text-[9px] font-semibold tracking-[0.16em] ${
+                isInverse
+                  ? "bg-white/14 text-white/82"
+                  : "bg-[color:var(--surface-strong)] text-[color:var(--muted-foreground)]"
+              }`}
+            >
+              {formatMediaTypeLabel(mediaType)}
+            </span>
+          </div>
+          <div>
+            <p className="line-clamp-2 break-all text-[12px] font-medium leading-4">
+              {label}
+            </p>
+            <p
+              className={`mt-1 text-[10px] leading-4 ${
+                isInverse ? "text-white/70" : "text-[color:var(--muted-foreground)]"
+              }`}
+            >
+              Preview unavailable. Still attached.
+            </p>
+          </div>
+        </div>
+      )}
+    </a>
+  );
+}
+
+function PendingAttachmentCard({
+  attachment,
+  onRemove,
+}: Readonly<{
+  attachment: ComposerAttachment;
+  onRemove: (attachmentId: string) => void;
+}>) {
+  const [previewFailed, setPreviewFailed] = useState(
+    attachment.kind === "image" && !canPreviewImageInBrowser(attachment.mediaType),
+  );
+  const canShowPreview =
+    attachment.kind === "image" && attachment.previewUrl && !previewFailed;
+
+  return (
+    <div
+      className="inline-flex min-h-14 max-w-full items-center gap-3 rounded-[18px] border border-[color:var(--border)] bg-[color:var(--surface-muted)] px-2.5 py-2 text-[12px] text-[color:var(--foreground)]"
+      data-testid="pending-attachment"
+    >
+      {canShowPreview ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          alt={attachment.filename}
+          className="h-10 w-10 rounded-[12px] object-cover"
+          src={attachment.previewUrl}
+          onError={() => setPreviewFailed(true)}
+        />
+      ) : (
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-[color:var(--surface-strong)] text-[color:var(--muted-foreground)]">
+          {attachment.kind === "image" ? (
+            <ImageIcon className="h-4 w-4" />
+          ) : (
+            <FileText className="h-4 w-4" />
+          )}
+        </span>
+      )}
+      <span className="min-w-0">
+        <span className="block max-w-[16rem] truncate font-medium">
+          {attachment.filename}
+        </span>
+        <span className="block max-w-[16rem] truncate text-[10px] text-[color:var(--muted-foreground)]">
+          {attachment.kind === "image"
+            ? previewFailed
+              ? "Image attached · browser preview unavailable"
+              : "Image ready for vision route"
+            : "Text context ready"}
+        </span>
+      </span>
+      <button
+        aria-label={`Remove ${attachment.filename}`}
+        className="ml-auto rounded-full p-1 text-[color:var(--muted-foreground)] transition hover:bg-[color:var(--surface-strong)] hover:text-[color:var(--foreground)]"
+        type="button"
+        onClick={() => onRemove(attachment.id)}
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
 function MessageAttachments({ message }: { message: UIMessage }) {
   const fileParts = message.parts.filter((part) => part.type === "file");
   const textAttachments = message.parts.filter(isAttachmentTextPart);
+  const isUser = message.role === "user";
 
   if (fileParts.length === 0 && textAttachments.length === 0) {
     return null;
@@ -528,24 +672,21 @@ function MessageAttachments({ message }: { message: UIMessage }) {
     <div className="mb-3 flex flex-wrap gap-2">
       {fileParts.map((part, index) =>
         part.mediaType.startsWith("image/") ? (
-          <a
+          <ImageAttachmentPreview
             key={`${part.filename ?? part.url}-${index}`}
-            href={part.url}
-            target="_blank"
-            rel="noreferrer"
-            className="overflow-hidden rounded-[18px] border border-white/15 bg-white/10"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              alt={part.filename ?? "Uploaded image"}
-              className="h-28 w-28 object-cover"
-              src={part.url}
-            />
-          </a>
+            filename={part.filename}
+            mediaType={part.mediaType}
+            tone={isUser ? "inverse" : "default"}
+            url={part.url}
+          />
         ) : (
           <div
             key={`${part.filename ?? part.url}-${index}`}
-            className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-2 text-xs"
+            className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs ${
+              isUser
+                ? "border-white/15 bg-white/10 text-white"
+                : "border-[color:var(--border)] bg-[color:var(--surface-muted)]"
+            }`}
           >
             <FileText className="h-3.5 w-3.5" />
             {part.filename ?? "Attachment"}
@@ -555,7 +696,11 @@ function MessageAttachments({ message }: { message: UIMessage }) {
       {textAttachments.map((part) => (
         <div
           key={part.id}
-          className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-2 text-xs"
+          className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs ${
+            isUser
+              ? "border-white/15 bg-white/10 text-white"
+              : "border-[color:var(--border)] bg-[color:var(--surface-muted)]"
+          }`}
         >
           <FileText className="h-3.5 w-3.5" />
           {part.data.filename}
@@ -946,6 +1091,14 @@ export function ConversationSession({
     modelOptions[0];
   const activeError = gateError ?? error?.message ?? (speechError || null);
   const isStreaming = status === "streaming" || status === "submitted";
+  const activeMcpServerCount = mcpServers.filter(
+    (server) => server.enabled && server.url.trim(),
+  ).length;
+  const toolGuideText = currentModel.supportsTools
+    ? activeMcpServerCount > 0
+      ? `Built-in memory and time tools are available. ${activeMcpServerCount} MCP server${activeMcpServerCount === 1 ? "" : "s"} will be discovered when a prompt needs tools.`
+      : "Built-in memory and time tools are available. Add MCP servers in Settings to expose external actions."
+    : "This selected model is not marked tool-capable; Auto Router can switch when your prompt asks for tools.";
 
   // Build system prompt from memories
   const systemPrompt = formatMemoriesAsSystemPrompt(memories);
@@ -1327,6 +1480,7 @@ export function ConversationSession({
             className="hidden"
             multiple
             accept="image/*,.txt,.md,.markdown,.csv,.json,.jsonl,.ts,.tsx,.js,.jsx,.css,.html,.xml,.yml,.yaml"
+            data-testid="composer-file-input"
             type="file"
             onChange={(event) => {
               void handleAttachmentSelection(event.target.files);
@@ -1344,28 +1498,38 @@ export function ConversationSession({
           {pendingAttachments.length > 0 ? (
             <div className="mb-2 flex flex-wrap gap-2 px-2.5">
               {pendingAttachments.map((attachment) => (
-                <div
+                <PendingAttachmentCard
                   key={attachment.id}
-                  className="inline-flex items-center gap-2 rounded-full border border-[color:var(--border)] bg-[color:var(--surface-muted)] px-3 py-2 text-[12px] text-[color:var(--foreground)]"
-                >
-                  {attachment.kind === "image" ? (
-                    <ImageIcon className="h-3.5 w-3.5" />
-                  ) : (
-                    <FileText className="h-3.5 w-3.5" />
-                  )}
-                  <span className="max-w-[16rem] truncate">{attachment.filename}</span>
-                  <button
-                    aria-label={`Remove ${attachment.filename}`}
-                    className="text-[color:var(--muted-foreground)] transition hover:text-[color:var(--foreground)]"
-                    type="button"
-                    onClick={() => removePendingAttachment(attachment.id)}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+                  attachment={attachment}
+                  onRemove={removePendingAttachment}
+                />
               ))}
             </div>
           ) : null}
+
+          <div
+            id={COMPOSER_TOOL_GUIDE_ID}
+            className="mb-2 flex flex-col gap-2 rounded-[18px] border border-[color:var(--border)] bg-[color:var(--surface-muted)] px-3 py-2.5 text-[12px] leading-5 text-[color:var(--muted-foreground)] sm:flex-row sm:items-center sm:justify-between"
+            data-testid="tool-mcp-guide"
+          >
+            <div className="min-w-0">
+              <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--accent-strong)]">
+                <Sparkles className="h-3.5 w-3.5" />
+                Tools & MCP are automatic
+              </p>
+              <p className="mt-1">{toolGuideText}</p>
+              <p className="mt-1">
+                Ask naturally, for example: “remember this”, “what time is it in Taipei”, or “use my GitHub MCP”.
+              </p>
+            </div>
+            <button
+              className="shrink-0 self-start rounded-full border border-[color:var(--border)] bg-[color:var(--surface-strong)] px-3 py-1.5 text-[11px] font-medium text-[color:var(--foreground)] transition hover:border-[color:var(--border-strong)] hover:text-[color:var(--accent-strong)] sm:self-center"
+              type="button"
+              onClick={onOpenSettings}
+            >
+              Configure MCP
+            </button>
+          </div>
 
           <p
             id={COMPOSER_ATTACHMENT_HELP_ID}
@@ -1378,6 +1542,7 @@ export function ConversationSession({
 
           <textarea
             ref={textareaRef}
+            aria-describedby={`${COMPOSER_ATTACHMENT_HELP_ID} ${COMPOSER_TOOL_GUIDE_ID}`}
             className="min-h-[54px] w-full resize-none bg-transparent px-2.5 py-2 text-[14px] leading-6 text-[color:var(--foreground)] outline-none placeholder:text-[color:var(--muted-foreground)]"
             data-testid="composer-input"
             placeholder={
@@ -1416,11 +1581,15 @@ export function ConversationSession({
                   {memories.length} memories
                 </span>
               ) : null}
-              {mcpServers.filter((server) => server.enabled && server.url.trim()).length > 0 ? (
+              {activeMcpServerCount > 0 ? (
                 <span className="rounded-full bg-[color:var(--surface-muted)] px-2 py-1">
-                  {mcpServers.filter((server) => server.enabled && server.url.trim()).length} MCP
+                  {activeMcpServerCount} MCP active
                 </span>
-              ) : null}
+              ) : (
+                <span className="rounded-full bg-[color:var(--surface-muted)] px-2 py-1">
+                  MCP not configured
+                </span>
+              )}
             </div>
 
             <div className="flex items-center gap-2">
