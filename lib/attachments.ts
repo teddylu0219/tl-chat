@@ -25,6 +25,56 @@ export type ComposerAttachment = {
   previewUrl?: string;
 };
 
+export function canPreviewImageInBrowser(mediaType: string) {
+  return /^image\/(?:png|jpe?g|gif|webp|avif|svg\+xml)$/i.test(mediaType);
+}
+
+export function canConvertImagePreview(mediaType: string) {
+  return /^image\/hei[cf]$/i.test(mediaType);
+}
+
+export async function createImagePreviewUrl({
+  filename,
+  mediaType,
+  url,
+}: {
+  filename?: string;
+  mediaType: string;
+  url: string;
+}) {
+  if (canPreviewImageInBrowser(mediaType)) {
+    return url;
+  }
+
+  if (!canConvertImagePreview(mediaType) || !url.startsWith("data:")) {
+    return undefined;
+  }
+
+  try {
+    const response = await fetch("/api/attachment-preview", {
+      body: JSON.stringify({
+        dataUrl: url,
+        filename,
+        mediaType,
+      }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      return undefined;
+    }
+
+    const payload = (await response.json()) as { previewUrl?: string };
+
+    return payload.previewUrl;
+  } catch {
+    return undefined;
+  }
+}
+
 export function isAttachmentTextPart(
   part: UIMessage["parts"][number],
 ): part is AttachmentTextPart {
@@ -105,19 +155,25 @@ export async function prepareComposerAttachments(files: FileList | File[] | null
       }
 
       const url = await readFileAsDataUrl(file);
+      const mediaType = file.type || "image/*";
+      const previewUrl = await createImagePreviewUrl({
+        filename: file.name,
+        mediaType,
+        url,
+      });
 
       attachments.push({
         filename: file.name,
         id: crypto.randomUUID(),
         kind: "image",
-        mediaType: file.type || "image/*",
+        mediaType,
         part: {
           filename: file.name,
-          mediaType: file.type || "image/*",
+          mediaType,
           type: "file",
           url,
         },
-        previewUrl: url,
+        previewUrl,
       });
       continue;
     }

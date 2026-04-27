@@ -13,7 +13,7 @@ Status: complete for the current foundation pass.
 
 Status: in progress.
 
-- Show routing decisions clearly enough for users to trust model selection. Initial route chips are implemented for auto/fallback assistant messages.
+- Show routing decisions clearly enough for users to trust model selection without crowding the chat surface. Route details are now tucked away from the primary visual UI while concise model/tool chips remain visible.
 - Make tool execution state, failures, and outputs easier to inspect without overwhelming the chat. Initial status badges and MCP output formatting are implemented.
 - Make MCP discovery failures visible to the model instead of silently dropping unavailable servers. Discovery now has timeout handling and partial failure summaries.
 - Let users test individual MCP server drafts from Settings before saving them.
@@ -22,10 +22,11 @@ Status: in progress.
 - Protect custom model capability settings with e2e coverage for disabled/enabled controls and save/reopen persistence.
 - Surface model capabilities directly in chat and council model controls, including routed assistant metadata chips.
 - Add safer memory review and conflict handling. Automatic memory updates now expose a review action that opens settings.
-- Make multimodal limits understandable before upload. Composer attachment help text now lists limits and supported text-like file families.
+- Make multimodal limits understandable without turning the composer into documentation. Attachment limits remain available to assistive tech and validation errors, while the visible composer stays focused.
 - Make real OpenRouter multimodal requests robust by converting browser data URL image attachments into model file bytes before provider calls.
-- Keep unsupported browser image formats, including HEIC, visible with explicit "preview unavailable but attached" UI instead of blank frames.
-- Clarify that built-in tools run automatically and MCP servers are configured in Settings, with visible composer guidance and status chips.
+- Keep unsupported browser image formats, including HEIC, visible by generating browser-safe JPEG previews when possible and compact fallback cards otherwise.
+- Clarify tool readiness with concise status chips instead of persistent MCP setup instructions in the composer.
+- Keep Settings compact and action-oriented by removing explanatory paragraphs that duplicate labels or documentation.
 - Record screenshots in `screenshots/` when UI changes are visually validated.
 
 ## Milestone 3: Expand Agentic Workflows

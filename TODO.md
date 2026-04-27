@@ -27,3 +27,4 @@
 - [x] Add capability badges to model pickers and route metadata chips.
 - [x] Add conversation search result highlighting and jump-to-thread keyboard support.
 - [x] Fix real OpenRouter image uploads, HEIC fallback previews, and Tools/MCP composer guidance.
+- [x] Add real HEIC previews and simplify chat/settings UI copy.

@@ -43,6 +43,8 @@ import {
   MAX_IMAGE_ATTACHMENT_BYTES,
   MAX_TEXT_ATTACHMENT_CHARS,
   type ComposerAttachment,
+  canPreviewImageInBrowser,
+  createImagePreviewUrl,
   isAttachmentTextPart,
   prepareComposerAttachments,
 } from "@/lib/attachments";
@@ -89,7 +91,6 @@ type ConversationSessionProps = {
 
 const CHAT_STREAM_THROTTLE_MS = 120;
 const COMPOSER_ATTACHMENT_HELP_ID = "composer-attachment-help";
-const COMPOSER_TOOL_GUIDE_ID = "composer-tool-guide";
 const IMAGE_ATTACHMENT_LIMIT_MB = MAX_IMAGE_ATTACHMENT_BYTES / 1024 / 1024;
 const LARGE_MESSAGE_RICH_RENDER_THRESHOLD = 2400;
 const TEXT_ATTACHMENT_LIMIT_LABEL = `${Math.round(MAX_TEXT_ATTACHMENT_CHARS / 1000)}k`;
@@ -135,18 +136,6 @@ function getToolDisplayName(part: UIMessage["parts"][number]) {
   }
 
   return part.type.replace(/^tool-/, "").replace(/_/g, " ");
-}
-
-function formatRouteModeLabel(routeMode?: string) {
-  if (routeMode === "fallback") {
-    return "Fallback route";
-  }
-
-  if (routeMode === "auto") {
-    return "Auto route";
-  }
-
-  return "Route";
 }
 
 async function requestMemoryOperations({
@@ -521,10 +510,6 @@ function formatMediaTypeLabel(mediaType: string) {
   return mediaType.replace(/^image\//, "").replace(/\+xml$/, "").toUpperCase();
 }
 
-function canPreviewImageInBrowser(mediaType: string) {
-  return /^image\/(?:png|jpe?g|gif|webp|avif|svg\+xml)$/i.test(mediaType);
-}
-
 function ImageAttachmentPreview({
   filename,
   mediaType,
@@ -536,11 +521,38 @@ function ImageAttachmentPreview({
   tone: "default" | "inverse";
   url: string;
 }>) {
-  const [previewFailed, setPreviewFailed] = useState(
-    !canPreviewImageInBrowser(mediaType),
+  const isBrowserPreviewable = canPreviewImageInBrowser(mediaType);
+  const [convertedPreviewUrl, setConvertedPreviewUrl] = useState<string | null>(null);
+  const [isResolvingPreview, setIsResolvingPreview] = useState(
+    () => !isBrowserPreviewable && url.startsWith("data:"),
   );
   const label = filename ?? "Uploaded image";
   const isInverse = tone === "inverse";
+  const resolvedPreviewUrl = isBrowserPreviewable ? url : convertedPreviewUrl;
+  const previewFailed = !resolvedPreviewUrl && !isResolvingPreview;
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    if (isBrowserPreviewable || !url.startsWith("data:")) {
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    void createImagePreviewUrl({ filename, mediaType, url }).then((previewUrl) => {
+      if (!isCurrent) {
+        return;
+      }
+
+      setConvertedPreviewUrl(previewUrl ?? null);
+      setIsResolvingPreview(false);
+    });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [filename, isBrowserPreviewable, mediaType, url]);
 
   return (
     <a
@@ -560,16 +572,16 @@ function ImageAttachmentPreview({
           : label
       }
     >
-      {!previewFailed ? (
+      {resolvedPreviewUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           alt={label}
-          className="h-28 w-28 object-cover"
-          src={url}
-          onError={() => setPreviewFailed(true)}
+          className="h-32 w-32 object-cover"
+          src={resolvedPreviewUrl}
+          onError={() => setConvertedPreviewUrl(null)}
         />
       ) : (
-        <div className="flex h-28 w-36 flex-col justify-between p-3">
+        <div className="flex h-24 w-32 flex-col justify-between p-3">
           <div className="flex items-center justify-between gap-2">
             <ImageIcon className="h-4 w-4 opacity-80" />
             <span
@@ -586,13 +598,15 @@ function ImageAttachmentPreview({
             <p className="line-clamp-2 break-all text-[12px] font-medium leading-4">
               {label}
             </p>
-            <p
-              className={`mt-1 text-[10px] leading-4 ${
-                isInverse ? "text-white/70" : "text-[color:var(--muted-foreground)]"
-              }`}
-            >
-              Preview unavailable. Still attached.
-            </p>
+            {isResolvingPreview ? (
+              <p
+                className={`mt-1 text-[10px] leading-4 ${
+                  isInverse ? "text-white/70" : "text-[color:var(--muted-foreground)]"
+                }`}
+              >
+                Preparing...
+              </p>
+            ) : null}
           </div>
         </div>
       )}
@@ -608,7 +622,7 @@ function PendingAttachmentCard({
   onRemove: (attachmentId: string) => void;
 }>) {
   const [previewFailed, setPreviewFailed] = useState(
-    attachment.kind === "image" && !canPreviewImageInBrowser(attachment.mediaType),
+    attachment.kind === "image" && !attachment.previewUrl,
   );
   const canShowPreview =
     attachment.kind === "image" && attachment.previewUrl && !previewFailed;
@@ -642,9 +656,9 @@ function PendingAttachmentCard({
         <span className="block max-w-[16rem] truncate text-[10px] text-[color:var(--muted-foreground)]">
           {attachment.kind === "image"
             ? previewFailed
-              ? "Image attached · browser preview unavailable"
-              : "Image ready for vision route"
-            : "Text context ready"}
+              ? formatMediaTypeLabel(attachment.mediaType)
+              : "Image"
+            : "Text context"}
         </span>
       </span>
       <button
@@ -818,25 +832,10 @@ function MessageBubble({
           ) : null}
         </div>
         {routeMetadata?.routeMode && routeMetadata.routeMode !== "manual" ? (
-          <div
-            className="mb-3 inline-flex max-w-full items-center gap-2 rounded-full border border-[color:var(--border)] bg-[color:var(--surface-muted)] px-3 py-1.5 text-[12px] text-[color:var(--muted-foreground)]"
-            title={routeMetadata.routeReason}
-          >
-            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--accent-strong)]">
-              {formatRouteModeLabel(routeMetadata.routeMode)}
-            </span>
-            <ModelCapabilityBadges
-              compact
-              model={routedModel}
-              testId="route-model-capabilities"
-            />
-            {routeMetadata.routeReason ? (
-              <>
-                <span className="h-1 w-1 shrink-0 rounded-full bg-[color:var(--border-strong)]" />
-                <span className="truncate">{routeMetadata.routeReason}</span>
-              </>
-            ) : null}
-          </div>
+          <span className="sr-only">
+            Routed to {routedModel?.label ?? routeMetadata.routedModelLabel ?? "assistant model"}.
+            {routeMetadata.routeReason ? ` ${routeMetadata.routeReason}` : ""}
+          </span>
         ) : null}
         <MessageAttachments message={message} />
         {!isUser ? <ToolActivityList message={message} /> : null}
@@ -1094,11 +1093,6 @@ export function ConversationSession({
   const activeMcpServerCount = mcpServers.filter(
     (server) => server.enabled && server.url.trim(),
   ).length;
-  const toolGuideText = currentModel.supportsTools
-    ? activeMcpServerCount > 0
-      ? `Built-in memory and time tools are available. ${activeMcpServerCount} MCP server${activeMcpServerCount === 1 ? "" : "s"} will be discovered when a prompt needs tools.`
-      : "Built-in memory and time tools are available. Add MCP servers in Settings to expose external actions."
-    : "This selected model is not marked tool-capable; Auto Router can switch when your prompt asks for tools.";
 
   // Build system prompt from memories
   const systemPrompt = formatMemoriesAsSystemPrompt(memories);
@@ -1319,7 +1313,7 @@ export function ConversationSession({
           </label>
           <ModelCapabilityBadges
             compact
-            className="hidden max-w-[360px] sm:flex"
+            className="sr-only"
             model={currentModel}
             testId="active-model-capabilities"
           />
@@ -1380,7 +1374,6 @@ export function ConversationSession({
               <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-[color:var(--border)] bg-[color:var(--surface-strong)] px-3.5 py-1.5 text-[13px] text-[color:var(--foreground)]">
                 <Sparkles className="h-4 w-4 text-[color:var(--accent-strong)]" />
                 {currentModel.label}
-                <ModelCapabilityBadges compact model={currentModel} />
               </div>
 
               <div className="mt-8 grid gap-3 text-left sm:grid-cols-3">
@@ -1507,33 +1500,9 @@ export function ConversationSession({
             </div>
           ) : null}
 
-          <div
-            id={COMPOSER_TOOL_GUIDE_ID}
-            className="mb-2 flex flex-col gap-2 rounded-[18px] border border-[color:var(--border)] bg-[color:var(--surface-muted)] px-3 py-2.5 text-[12px] leading-5 text-[color:var(--muted-foreground)] sm:flex-row sm:items-center sm:justify-between"
-            data-testid="tool-mcp-guide"
-          >
-            <div className="min-w-0">
-              <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--accent-strong)]">
-                <Sparkles className="h-3.5 w-3.5" />
-                Tools & MCP are automatic
-              </p>
-              <p className="mt-1">{toolGuideText}</p>
-              <p className="mt-1">
-                Ask naturally, for example: “remember this”, “what time is it in Taipei”, or “use my GitHub MCP”.
-              </p>
-            </div>
-            <button
-              className="shrink-0 self-start rounded-full border border-[color:var(--border)] bg-[color:var(--surface-strong)] px-3 py-1.5 text-[11px] font-medium text-[color:var(--foreground)] transition hover:border-[color:var(--border-strong)] hover:text-[color:var(--accent-strong)] sm:self-center"
-              type="button"
-              onClick={onOpenSettings}
-            >
-              Configure MCP
-            </button>
-          </div>
-
           <p
             id={COMPOSER_ATTACHMENT_HELP_ID}
-            className="px-2.5 pb-1 text-[11px] leading-5 text-[color:var(--muted-foreground)]"
+            className="sr-only"
           >
             Attach up to {MAX_ATTACHMENTS} files: images up to{" "}
             {IMAGE_ATTACHMENT_LIMIT_MB}MB each, plus Markdown, text, CSV,
@@ -1542,7 +1511,7 @@ export function ConversationSession({
 
           <textarea
             ref={textareaRef}
-            aria-describedby={`${COMPOSER_ATTACHMENT_HELP_ID} ${COMPOSER_TOOL_GUIDE_ID}`}
+            aria-describedby={COMPOSER_ATTACHMENT_HELP_ID}
             className="min-h-[54px] w-full resize-none bg-transparent px-2.5 py-2 text-[14px] leading-6 text-[color:var(--foreground)] outline-none placeholder:text-[color:var(--muted-foreground)]"
             data-testid="composer-input"
             placeholder={
@@ -1568,28 +1537,26 @@ export function ConversationSession({
           <div className="flex flex-wrap items-center justify-between gap-2.5 border-t border-[color:var(--border)] px-2.5 pt-2.5">
             <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-[color:var(--muted-foreground)]">
               <span className="rounded-full bg-[color:var(--surface-muted)] px-2 py-1">
-                {currentModel.provider}
-              </span>
-              <span className="rounded-full bg-[color:var(--surface-muted)] px-2 py-1">
                 {currentModel.label}
               </span>
               <span className="rounded-full bg-[color:var(--surface-muted)] px-2 py-1">
-                {isStreaming ? "Streaming..." : "Saved locally"}
+                {isStreaming ? "Streaming" : "Saved"}
               </span>
+              {currentModel.supportsTools ? (
+                <span className="rounded-full bg-[color:var(--surface-muted)] px-2 py-1">
+                  Tools
+                </span>
+              ) : null}
               {memories.length > 0 ? (
                 <span className="rounded-full bg-[color:var(--surface-muted)] px-2 py-1">
-                  {memories.length} memories
+                  {memories.length} mem
                 </span>
               ) : null}
               {activeMcpServerCount > 0 ? (
                 <span className="rounded-full bg-[color:var(--surface-muted)] px-2 py-1">
-                  {activeMcpServerCount} MCP active
+                  {activeMcpServerCount} MCP
                 </span>
-              ) : (
-                <span className="rounded-full bg-[color:var(--surface-muted)] px-2 py-1">
-                  MCP not configured
-                </span>
-              )}
+              ) : null}
             </div>
 
             <div className="flex items-center gap-2">

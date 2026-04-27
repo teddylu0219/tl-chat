@@ -131,7 +131,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
 function SettingsPanelContent({
   archivedConversations,
   memories,
-  modelId,
   onAddMemory,
   onClearMemories,
   onClose,
@@ -307,10 +306,10 @@ function SettingsPanelContent({
         <div className="flex items-center justify-between border-b border-[color:var(--border)] px-6 py-5">
           <div>
             <p className="text-xs uppercase tracking-[0.28em] text-[color:var(--muted-foreground)]">
-              Local settings
+              Settings
             </p>
             <h2 className="serif-heading mt-2 text-4xl leading-none text-[color:var(--foreground)]">
-              Keep it local.
+              Local control
             </h2>
           </div>
 
@@ -336,9 +335,6 @@ function SettingsPanelContent({
                 <h3 className="text-sm font-semibold text-[color:var(--foreground)]">
                   OpenRouter key
                 </h3>
-                <p className="mt-1 text-sm text-[color:var(--muted-foreground)]">
-                  Stored in IndexedDB on this device only.
-                </p>
               </div>
             </div>
 
@@ -380,9 +376,6 @@ function SettingsPanelContent({
               <span className="text-sm font-semibold text-[color:var(--foreground)]">
                 Default model
               </span>
-              <span className="mt-1 block text-sm text-[color:var(--muted-foreground)]">
-                Used for new threads. Current thread: {modelId}
-              </span>
               <select
                 className="mt-4 w-full rounded-2xl border border-[color:var(--border)] bg-transparent px-4 py-3 text-sm text-[color:var(--foreground)] outline-none"
                 value={draftSettings.defaultModelId}
@@ -404,9 +397,6 @@ function SettingsPanelContent({
             <label className="rounded-[24px] border border-[color:var(--border)] bg-[color:var(--surface-strong)] p-5">
               <span className="text-sm font-semibold text-[color:var(--foreground)]">
                 Appearance
-              </span>
-              <span className="mt-1 block text-sm text-[color:var(--muted-foreground)]">
-                Choose the tone that fits your desk.
               </span>
               <select
                 className="mt-4 w-full rounded-2xl border border-[color:var(--border)] bg-transparent px-4 py-3 text-sm text-[color:var(--foreground)] outline-none"
@@ -435,9 +425,6 @@ function SettingsPanelContent({
             >
               Custom model id
             </label>
-            <p className="mt-1 text-sm text-[color:var(--muted-foreground)]">
-              Optional advanced override for any OpenRouter model id.
-            </p>
             <input
               id="custom-model-id-input"
               className="mt-4 w-full rounded-2xl border border-[color:var(--border)] bg-transparent px-4 py-3 text-sm text-[color:var(--foreground)] outline-none placeholder:text-[color:var(--muted-foreground)]"
@@ -478,9 +465,6 @@ function SettingsPanelContent({
                     />
                     {option.label}
                   </span>
-                  <span className="mt-1 block text-xs leading-5 text-[color:var(--muted-foreground)]">
-                    {option.description}
-                  </span>
                 </label>
               ))}
             </div>
@@ -496,9 +480,6 @@ function SettingsPanelContent({
                   <h3 className="text-sm font-semibold text-[color:var(--foreground)]">
                     MCP servers
                   </h3>
-                  <p className="mt-1 text-sm text-[color:var(--muted-foreground)]">
-                    Connect Streamable HTTP servers so the assistant can call external tools.
-                  </p>
                 </div>
               </div>
               <button
@@ -523,7 +504,7 @@ function SettingsPanelContent({
 
             {draftSettings.mcpServers.length === 0 ? (
               <div className="mt-4 rounded-[20px] border border-dashed border-[color:var(--border)] px-4 py-4 text-sm text-[color:var(--muted-foreground)]">
-                No MCP servers configured.
+                No servers.
               </div>
             ) : (
               <div className="mt-4 space-y-3">
@@ -672,9 +653,7 @@ function SettingsPanelContent({
                   Local backup
                 </h3>
                 <p className="mt-1 text-sm leading-6 text-[color:var(--muted-foreground)]">
-                  Export memories and MCP servers as JSON. OpenRouter keys are
-                  intentionally excluded. Import replaces memories and MCP
-                  servers, while keeping your API key.
+                  Memories + MCP. Key excluded.
                 </p>
               </div>
               <div className="flex shrink-0 flex-wrap justify-end gap-2">
@@ -717,9 +696,6 @@ function SettingsPanelContent({
                 <h3 className="text-sm font-semibold text-[color:var(--foreground)]">
                   Archived threads
                 </h3>
-                <p className="mt-1 text-sm text-[color:var(--muted-foreground)]">
-                  Hidden from the sidebar until restored.
-                </p>
               </div>
               <span className="rounded-full bg-[color:var(--surface-muted)] px-3 py-1 text-xs text-[color:var(--muted-foreground)]">
                 {archivedConversations.length}
@@ -763,10 +739,7 @@ function SettingsPanelContent({
           </section>
         </div>
 
-        <div className="flex items-center justify-between border-t border-[color:var(--border)] px-6 py-5">
-          <p className="text-sm text-[color:var(--muted-foreground)]">
-            Saving keeps everything local to this browser.
-          </p>
+        <div className="flex items-center justify-end border-t border-[color:var(--border)] px-6 py-5">
           <div className="flex gap-3">
             <button
               className="rounded-full border border-[color:var(--border)] px-4 py-2 text-sm text-[color:var(--foreground)]"

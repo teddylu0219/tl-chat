@@ -1,5 +1,31 @@
 # Progress
 
+## 2026-04-27T13:32:04+08:00
+
+Completed: Reworked multimodal preview and reduced chat/settings UI copy so the product feels like a focused chat app instead of inline documentation. HEIC/HEIF images now get a browser-safe JPEG preview through `/api/attachment-preview`, pending and sent image attachments render real thumbnails when conversion succeeds, and fallback cards stay compact when preview conversion is unavailable. Removed the visible fallback route strip, header capability badge clutter, composer MCP explainer, and unnecessary attachment-limit copy from the main UI; route/model capability details remain available to assistive tech only. Settings copy was tightened so each section is labeled by action instead of long explanatory paragraphs.
+
+Verification:
+
+- `npm run lint`: passed.
+- `npm test`: passed, 12 files and 70 tests.
+- `npm run build`: passed.
+- `npm run test:e2e`: passed, 18 tests.
+- Computer Use manual visual test in Zen: passed. Started `npm run dev`, opened `http://localhost:3000`, confirmed the existing HEIC message displays an actual image thumbnail, the visible fallback route row is gone, the composer no longer shows the MCP configure card, and Settings has a cleaner compact layout.
+
+Screenshots:
+
+- `screenshots/2026-04-27-heic-preview-clean-chat.png`: Browser validation showing the HEIC thumbnail in the user message and the simplified composer/status area.
+
+Findings:
+
+- The previous OpenRouter sending path was fixed, but the product still looked broken because browser-unsupported formats such as HEIC had no visual preview. A small local conversion route gives the UI a real preview without changing the model payload.
+- Routing and MCP details are useful state, but they should not dominate the chat surface. The primary UI now only exposes concise status chips; deeper detail belongs in diagnostics or Settings.
+
+Resolved errors:
+
+- The already-open browser initially showed `localhost:3000` as unavailable because the dev server was not running; started `npm run dev` and reloaded.
+- The first screenshot capture grabbed Codex instead of Zen after the terminal command took focus; reactivated Zen and overwrote the screenshot with the correct app view.
+
 ## 2026-04-27T13:12:00+08:00
 
 Completed: Fixed the real OpenRouter multimodal failure and clarified the tool/MCP experience. Browser `data:` image attachments are now converted server-side into AI SDK file bytes before model calls, so OpenRouter no longer rejects them with `URL scheme must be http or https, got data:`. HEIC and other browser-unsupported image formats now render a clear attachment card instead of an empty frame. The composer now explains that built-in tools run automatically and that MCP servers are configured in Settings.

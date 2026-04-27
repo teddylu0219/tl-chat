@@ -35,7 +35,7 @@ test("discards canceled settings drafts and persists saved settings", async ({
 }) => {
   await page.goto("/");
 
-  await expect(page.getByText("Attach up to 4 files")).toBeVisible();
+  await expect(page.getByTestId("composer-input")).toBeVisible();
   await page.getByTestId("header-settings-button").click();
   await expect(page.getByTestId("settings-panel")).toBeVisible();
   await page.getByTestId("api-key-input").fill("sk-or-v1-unsaved-key");
@@ -107,18 +107,25 @@ test("persists custom model capability settings", async ({ page }) => {
   await expect(activeCapabilities).not.toContainText("Reasoning");
 });
 
-test("keeps HEIC attachments visible and explains automatic tools", async ({
+test("renders HEIC previews and keeps the composer quiet", async ({
   page,
 }) => {
+  const previewUrl =
+    "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MCIgaGVpZ2h0PSI4MCIgdmlld0JveD0iMCAwIDgwIDgwIj48cmVjdCB3aWR0aD0iODAiIGhlaWdodD0iODAiIGZpbGw9IiM5ZTdlNjEiLz48Y2lyY2xlIGN4PSI0MCIgY3k9IjQwIiByPSIyMiIgZmlsbD0iI2YzZWVlNiIvPjwvc3ZnPg==";
+
+  await page.route("**/api/attachment-preview", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({ mediaType: "image/jpeg", previewUrl }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+
   await page.goto("/");
   await configureLocalKey(page);
 
-  await expect(page.getByTestId("tool-mcp-guide")).toContainText(
-    "Tools & MCP are automatic",
-  );
-  await expect(page.getByTestId("tool-mcp-guide")).toContainText(
-    "Built-in memory and time tools",
-  );
+  await expect(page.getByTestId("tool-mcp-guide")).toHaveCount(0);
+  await expect(page.getByText("Configure MCP")).toHaveCount(0);
 
   await page.getByTestId("composer-file-input").setInputFiles({
     buffer: Buffer.from("fake-heic-bytes"),
@@ -129,16 +136,18 @@ test("keeps HEIC attachments visible and explains automatic tools", async ({
   await expect(page.getByTestId("pending-attachment")).toContainText(
     "IMG_3547.HEIC",
   );
-  await expect(page.getByTestId("pending-attachment")).toContainText(
-    "browser preview unavailable",
-  );
+  await expect(page.getByTestId("pending-attachment").locator("img")).toBeVisible();
 
   await page.getByTestId("composer-input").fill("這是什麼");
   await page.getByTestId("send-button").click();
 
   const userMessage = page.getByTestId("message-user").last();
-  await expect(userMessage.getByTestId("message-image-attachment")).toContainText(
-    "Preview unavailable. Still attached.",
+  await expect(
+    userMessage.getByTestId("message-image-attachment").locator("img"),
+  ).toHaveAttribute("src", previewUrl);
+  await expect(page.getByText("Fallback route")).toHaveCount(0);
+  await expect(page.getByText("GPT-5.4 Mini does not support image input.")).toHaveCount(
+    0,
   );
   await expect(userMessage).toContainText("這是什麼");
   await expect(page.getByTestId("message-assistant").last()).toContainText(
