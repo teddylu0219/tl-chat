@@ -2,6 +2,7 @@ import type { UIMessage } from "ai";
 
 import {
   archiveConversation,
+  clearConversations,
   clearPersistence,
   deleteConversationPermanent,
   getSettings,
@@ -92,6 +93,43 @@ describe("persistence adapter", () => {
     await deleteConversationPermanent("remove-me");
 
     await expect(listConversations()).resolves.toHaveLength(0);
+  });
+
+  it("clears all conversations without deleting settings", async () => {
+    await saveSettings({ openRouterApiKey: "sk-or-v1-keep-me" });
+    await saveConversation({
+      archivedAt: null,
+      createdAt: "2026-03-19T08:00:00.000Z",
+      draft: "",
+      id: "first",
+      manualTitle: null,
+      messages: [createMessage("first")],
+      modelId: "openai/gpt-5.4-mini",
+      pinnedAt: null,
+      previewText: "first",
+      title: "First",
+      updatedAt: "2026-03-19T08:00:00.000Z",
+    });
+    await saveConversation({
+      archivedAt: null,
+      createdAt: "2026-03-19T09:00:00.000Z",
+      draft: "",
+      id: "second",
+      manualTitle: null,
+      messages: [createMessage("second")],
+      modelId: "openai/gpt-5.4-mini",
+      pinnedAt: null,
+      previewText: "second",
+      title: "Second",
+      updatedAt: "2026-03-19T09:00:00.000Z",
+    });
+
+    await clearConversations();
+
+    await expect(listConversations()).resolves.toHaveLength(0);
+    await expect(getSettings()).resolves.toMatchObject({
+      openRouterApiKey: "sk-or-v1-keep-me",
+    });
   });
 
   it("renames, pins, archives, restores, and unpins conversations", async () => {

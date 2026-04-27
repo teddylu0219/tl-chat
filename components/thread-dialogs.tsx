@@ -18,6 +18,13 @@ type DeleteConversationDialogProps = {
   onDelete: (conversation: ConversationRecord) => void;
 };
 
+type ClearHistoryDialogProps = {
+  conversationCount: number;
+  isOpen: boolean;
+  onClear: () => void;
+  onClose: () => void;
+};
+
 function DialogShell({
   children,
   onClose,
@@ -179,6 +186,64 @@ export function DeleteConversationDialog({
           >
             <Trash2 className="h-4 w-4" />
             Delete forever
+          </button>
+        </div>
+      </div>
+    </DialogShell>
+  );
+}
+
+export function ClearHistoryDialog({
+  conversationCount,
+  isOpen,
+  onClear,
+  onClose,
+}: ClearHistoryDialogProps) {
+  if (!isOpen) {
+    return null;
+  }
+
+  const threadLabel = conversationCount === 1 ? "thread" : "threads";
+
+  return (
+    <DialogShell onClose={onClose}>
+      <div className="px-6 pb-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[color:var(--surface-muted)] text-[color:var(--danger)]">
+            <AlertTriangle className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-[0.28em] text-[color:var(--muted-foreground)]">
+              Clear history
+            </p>
+            <h2 className="serif-heading mt-2 text-4xl leading-none text-[color:var(--foreground)]">
+              Delete every thread?
+            </h2>
+          </div>
+        </div>
+
+        <p className="mt-6 text-sm leading-6 text-[color:var(--muted-foreground)]">
+          This will permanently delete {conversationCount} saved {threadLabel} from this
+          browser. Your key, settings, and memories stay untouched.
+        </p>
+
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            className="rounded-full border border-[color:var(--border)] px-4 py-2 text-sm text-[color:var(--foreground)]"
+            type="button"
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button
+            className="flex items-center gap-2 rounded-full bg-[color:var(--danger)] px-5 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-55"
+            data-testid="clear-history-confirm"
+            disabled={conversationCount === 0}
+            type="button"
+            onClick={onClear}
+          >
+            <Trash2 className="h-4 w-4" />
+            Clear history
           </button>
         </div>
       </div>

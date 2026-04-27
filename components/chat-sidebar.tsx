@@ -1,6 +1,6 @@
 "use client";
 
-import { MessagesSquare, Pin, Plus, Search, Settings2, X } from "lucide-react";
+import { MessagesSquare, Pin, Plus, Search, Settings2, Trash2, X } from "lucide-react";
 import { Fragment, type KeyboardEvent, useId } from "react";
 
 import { ConversationActionMenu } from "@/components/conversation-action-menu";
@@ -237,8 +237,10 @@ function ThreadCard({
 
 type ChatSidebarProps = {
   activeConversationId: string;
+  clearableConversationCount: number;
   conversations: ConversationRecord[];
   onArchiveToggle: (conversation: ConversationRecord) => void;
+  onClearHistory: () => void;
   onConversationSelect: (conversationId: string) => void;
   onDeleteConversation: (conversation: ConversationRecord) => void;
   onNewConversation: () => void;
@@ -253,8 +255,10 @@ type ChatSidebarProps = {
 
 export function ChatSidebar({
   activeConversationId,
+  clearableConversationCount,
   conversations,
   onArchiveToggle,
+  onClearHistory,
   onConversationSelect,
   onDeleteConversation,
   onNewConversation,
@@ -426,6 +430,16 @@ export function ChatSidebar({
         >
           Settings
           <Settings2 className="h-4 w-4" />
+        </button>
+        <button
+          className="motion-lift flex w-full items-center justify-between rounded-2xl px-2 py-2 text-[13px] text-[color:var(--danger)] transition hover:bg-[color:var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-45"
+          data-testid="clear-history-button"
+          disabled={clearableConversationCount === 0}
+          type="button"
+          onClick={onClearHistory}
+        >
+          Clear history
+          <Trash2 className="h-4 w-4" />
         </button>
       </div>
     </aside>

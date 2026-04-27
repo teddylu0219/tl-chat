@@ -3,7 +3,11 @@
 import { LoaderCircle, Menu } from "lucide-react";
 import { useEffect, useEffectEvent, useState } from "react";
 
-import { DeleteConversationDialog, RenameConversationDialog } from "@/components/thread-dialogs";
+import {
+  ClearHistoryDialog,
+  DeleteConversationDialog,
+  RenameConversationDialog,
+} from "@/components/thread-dialogs";
 import { ConversationSession } from "@/components/conversation-session";
 import { CouncilSession } from "@/components/council-session";
 import { ChatSidebar } from "@/components/chat-sidebar";
@@ -28,6 +32,7 @@ import {
 import { DEFAULT_SETTINGS, type ConversationRecord, type LocalSettings } from "@/lib/persistence";
 import {
   archiveConversation,
+  clearConversations,
   clearMemories,
   deleteConversationPermanent,
   deleteMemory,
@@ -94,6 +99,7 @@ function ChatAppInner() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<ConversationRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ConversationRecord | null>(null);
+  const [isClearHistoryOpen, setIsClearHistoryOpen] = useState(false);
   const [sidebarSearchQuery, setSidebarSearchQuery] = useState("");
 
   const applyTheme = useEffectEvent((themePreference: LocalSettings["themePreference"]) => {
@@ -356,6 +362,20 @@ function ChatAppInner() {
     await createAndSelectConversation();
   }
 
+  async function handleClearHistory() {
+    await clearConversations();
+
+    const nextConversation = await saveConversation(
+      createConversationRecord(settings.defaultModelId),
+    );
+
+    setConversations([nextConversation]);
+    setActiveConversationId(nextConversation.id);
+    setSidebarSearchQuery("");
+    setIsClearHistoryOpen(false);
+    showToast("History cleared");
+  }
+
   async function handleRestoreArchivedConversation(conversation: ConversationRecord) {
     const updatedConversation = await restoreConversation(conversation.id);
 
@@ -510,6 +530,8 @@ function ChatAppInner() {
         setDeleteTarget(null);
       } else if (renameTarget) {
         setRenameTarget(null);
+      } else if (isClearHistoryOpen) {
+        setIsClearHistoryOpen(false);
       } else if (isSettingsOpen) {
         setIsSettingsOpen(false);
       } else if (isSidebarOpen) {
@@ -558,6 +580,7 @@ function ChatAppInner() {
   }
 
   const isCouncilMode = activeConversation.mode === "council";
+  const clearableConversationCount = conversations.filter(hasConversationContent).length;
 
   return (
     <>
@@ -566,8 +589,10 @@ function ChatAppInner() {
           <div className="hidden lg:block">
             <ChatSidebar
               activeConversationId={activeConversation.id}
+              clearableConversationCount={clearableConversationCount}
               conversations={activeConversations}
               onArchiveToggle={(conversation) => void handleArchiveToggle(conversation)}
+              onClearHistory={() => setIsClearHistoryOpen(true)}
               onConversationSelect={(conversationId) =>
                 setActiveConversationId(conversationId)
               }
@@ -628,8 +653,13 @@ function ChatAppInner() {
           <div className="flex h-full w-[min(100%,340px)] flex-col">
             <ChatSidebar
               activeConversationId={activeConversation.id}
+              clearableConversationCount={clearableConversationCount}
               conversations={activeConversations}
               onArchiveToggle={(conversation) => void handleArchiveToggle(conversation)}
+              onClearHistory={() => {
+                setIsClearHistoryOpen(true);
+                setIsSidebarOpen(false);
+              }}
               onConversationSelect={(conversationId) => {
                 setActiveConversationId(conversationId);
                 setIsSidebarOpen(false);
@@ -695,6 +725,12 @@ function ChatAppInner() {
         conversation={deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onDelete={(conversation) => void handleDeleteConversation(conversation)}
+      />
+      <ClearHistoryDialog
+        conversationCount={clearableConversationCount}
+        isOpen={isClearHistoryOpen}
+        onClear={() => void handleClearHistory()}
+        onClose={() => setIsClearHistoryOpen(false)}
       />
     </>
   );

@@ -398,17 +398,83 @@ const MarkdownMessage = memo(function MarkdownMessage({
   );
 });
 
-function ThinkingIndicator() {
+type AssistantActivity = "thinking" | "searching" | "using-tools";
+
+function getVisibleAssistantText(message?: UIMessage) {
+  return extractMemoriesFromResponse(getMessageText(message)).cleanText.trim();
+}
+
+function hasToolActivity(message?: UIMessage) {
+  if (!message) {
+    return false;
+  }
+
+  return message.parts.some(
+    (part) => part.type === "dynamic-tool" || part.type.startsWith("tool-"),
+  );
+}
+
+function getAssistantActivity({
+  messages,
+  status,
+  webSearchEnabled,
+}: {
+  messages: UIMessage[];
+  status: string;
+  webSearchEnabled: boolean;
+}): AssistantActivity | null {
+  if (status === "submitted") {
+    return webSearchEnabled ? "searching" : "thinking";
+  }
+
+  if (status !== "streaming") {
+    return null;
+  }
+
+  const lastAssistantMessage = [...messages]
+    .reverse()
+    .find((message) => message.role === "assistant");
+
+  if (getVisibleAssistantText(lastAssistantMessage)) {
+    return null;
+  }
+
+  if (webSearchEnabled) {
+    return "searching";
+  }
+
+  return hasToolActivity(lastAssistantMessage) ? "using-tools" : "thinking";
+}
+
+function getAssistantActivityLabel(activity: AssistantActivity) {
+  switch (activity) {
+    case "searching":
+      return "Searching web";
+    case "using-tools":
+      return "Using tools";
+    case "thinking":
+      return "Thinking";
+  }
+}
+
+function AssistantActivityIndicator({ activity }: { activity: AssistantActivity }) {
+  const label = getAssistantActivityLabel(activity);
+
   return (
-    <div className="mx-auto flex w-full max-w-[940px] justify-start animate-[message-rise_220ms_ease-out]">
-      <div className="max-w-[min(100%,840px)] px-0 py-0.5">
+    <div
+      aria-label={label}
+      aria-live="polite"
+      className="mx-auto flex w-full max-w-[940px] justify-start animate-[message-rise_220ms_ease-out]"
+      data-testid="assistant-activity-indicator"
+      role="status"
+    >
+      <div className="max-w-[min(100%,840px)] px-0 py-0.5 text-[color:var(--foreground)]">
         <p className="mb-2 px-0.5 text-[10px] uppercase tracking-[0.22em] text-[color:var(--muted-foreground)]">
           Assistant
         </p>
-        <div className="flex items-center gap-1.5 px-1 py-2">
-          <span className="h-2 w-2 rounded-full bg-[color:var(--accent)] animate-[thinking-dot_1.4s_ease-in-out_infinite]" />
-          <span className="h-2 w-2 rounded-full bg-[color:var(--accent)] animate-[thinking-dot_1.4s_ease-in-out_0.2s_infinite]" />
-          <span className="h-2 w-2 rounded-full bg-[color:var(--accent)] animate-[thinking-dot_1.4s_ease-in-out_0.4s_infinite]" />
+        <div className="inline-flex items-center gap-2 rounded-full bg-[color:var(--accent)] px-3.5 py-2.5 text-[13px] font-medium text-white shadow-[0_10px_22px_rgba(122,96,73,0.18)]">
+          <LoaderCircle className="h-4 w-4 animate-spin text-white" />
+          {label}
         </div>
       </div>
     </div>
@@ -943,6 +1009,11 @@ export function ConversationSession({
     modelOptions[0];
   const activeError = gateError ?? error?.message ?? (speechError || null);
   const isStreaming = status === "streaming" || status === "submitted";
+  const assistantActivity = getAssistantActivity({
+    messages,
+    status,
+    webSearchEnabled,
+  });
 
   // Build system prompt from memories
   const systemPrompt = formatMemoriesAsSystemPrompt(memories);
@@ -1252,6 +1323,12 @@ export function ConversationSession({
                   Add OpenRouter key
                 </button>
               ) : null}
+
+              {assistantActivity ? (
+                <div className="mt-8">
+                  <AssistantActivityIndicator activity={assistantActivity} />
+                </div>
+              ) : null}
             </div>
           </div>
         ) : (
@@ -1273,7 +1350,9 @@ export function ConversationSession({
               );
             })}
 
-            {status === "submitted" ? <ThinkingIndicator /> : null}
+            {assistantActivity ? (
+              <AssistantActivityIndicator activity={assistantActivity} />
+            ) : null}
 
             {activeError ? (
               <div className="mx-auto max-w-[min(100%,760px)] rounded-[22px] border border-[color:var(--danger)]/30 bg-[color:var(--surface-strong)] px-4 py-4 text-left">

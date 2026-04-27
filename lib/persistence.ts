@@ -213,6 +213,11 @@ export async function deleteConversationPermanent(conversationId: string) {
   await database.delete("conversations", conversationId);
 }
 
+export async function clearConversations() {
+  const database = await openChatDatabase();
+  await database.clear("conversations");
+}
+
 // --- Memory CRUD ---
 
 export async function listMemories(): Promise<MemoryEntry[]> {

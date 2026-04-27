@@ -159,6 +159,36 @@ test("sends web-enabled chat requests from the composer toggle", async ({
   expect(capturedRequest).toMatchObject({ webSearchEnabled: true });
 });
 
+test("shows activity while waiting for web output", async ({ page }) => {
+  let releaseResponse!: () => void;
+  const responseGate = new Promise<void>((resolve) => {
+    releaseResponse = resolve;
+  });
+
+  await page.route("**/api/chat", async (route) => {
+    await responseGate;
+    await route.continue();
+  });
+
+  await page.goto("/");
+  await configureLocalKey(page);
+
+  await page.getByTestId("web-search-toggle").click();
+  await page.getByTestId("composer-input").fill("今天黃金價格是多少？");
+  await page.getByTestId("send-button").click();
+
+  await expect(page.getByTestId("assistant-activity-indicator")).toContainText(
+    "Searching web",
+  );
+
+  releaseResponse();
+
+  await expect(page.getByTestId("message-assistant").last()).toContainText(
+    "今天黃金價格是多少？",
+  );
+  await expect(page.getByTestId("assistant-activity-indicator")).toHaveCount(0);
+});
+
 test("exports memories without the OpenRouter key", async ({
   page,
 }) => {
@@ -487,6 +517,29 @@ test("exports and deletes a thread", async ({ page }) => {
   await expect(
     page.getByText("Start a new chat to build your first thread."),
   ).toBeVisible();
+});
+
+test("clears all thread history after confirmation", async ({ page }) => {
+  await page.goto("/");
+
+  await configureLocalKey(page);
+  await sendPrompt(page, "Clear history first thread");
+
+  await page.getByTestId("new-chat-button").click();
+  await expect(page.getByRole("heading", { name: "New thread" })).toBeVisible();
+  await sendPrompt(page, "Clear history second thread");
+
+  await expect(conversationItems(page)).toHaveCount(2);
+
+  await page.getByTestId("clear-history-button").click();
+  await expect(page.getByTestId("clear-history-confirm")).toBeVisible();
+  await page.getByTestId("clear-history-confirm").click();
+
+  await expect(page.getByRole("heading", { name: "New thread" })).toBeVisible();
+  await expect(conversationItems(page)).toHaveCount(0);
+  await expect(page.getByText("Clear history first thread")).toHaveCount(0);
+  await expect(page.getByText("Clear history second thread")).toHaveCount(0);
+  await expect(page.getByTestId("clear-history-button")).toBeDisabled();
 });
 
 test("renders code tools and references for rich answers", async ({ page }) => {
