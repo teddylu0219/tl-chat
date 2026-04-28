@@ -1,4 +1,8 @@
-import { appendOpenRouterWebTools } from "./openrouter";
+import {
+  appendOpenRouterPdfPlugin,
+  appendOpenRouterWebTools,
+  transformOpenRouterRequestBody,
+} from "./openrouter";
 
 describe("OpenRouter helpers", () => {
   it("appends server-side web search and fetch tools without dropping existing tools", () => {
@@ -33,6 +37,44 @@ describe("OpenRouter helpers", () => {
           },
           type: "openrouter:web_fetch",
         },
+      ],
+    });
+  });
+
+  it("adds the OpenRouter PDF parser plugin with the free engine", () => {
+    expect(appendOpenRouterPdfPlugin({})).toMatchObject({
+      plugins: [
+        {
+          id: "file-parser",
+          pdf: {
+            engine: "cloudflare-ai",
+          },
+        },
+      ],
+    });
+  });
+
+  it("combines PDF parsing and web tools in one request transform", () => {
+    expect(
+      transformOpenRouterRequestBody({
+        requestBody: {
+          tools: [{ function: { name: "search_memories" }, type: "function" }],
+        },
+        webToolsEnabled: true,
+      }),
+    ).toMatchObject({
+      plugins: [
+        {
+          id: "file-parser",
+          pdf: {
+            engine: "cloudflare-ai",
+          },
+        },
+      ],
+      tools: [
+        { function: { name: "search_memories" }, type: "function" },
+        { type: "openrouter:web_search" },
+        { type: "openrouter:web_fetch" },
       ],
     });
   });

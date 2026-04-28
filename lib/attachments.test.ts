@@ -1,7 +1,9 @@
 import {
   MAX_ATTACHMENTS,
   MAX_IMAGE_ATTACHMENT_BYTES,
+  MAX_PDF_ATTACHMENT_BYTES,
   MAX_TEXT_ATTACHMENT_CHARS,
+  isPdfFile,
   isTextLikeFile,
   prepareComposerAttachments,
 } from "./attachments";
@@ -16,6 +18,18 @@ describe("attachment helpers", () => {
     ).toBe(true);
     expect(
       isTextLikeFile(new File(["hello"], "archive.zip", { type: "application/zip" })),
+    ).toBe(false);
+  });
+
+  it("detects PDF files by media type and extension", () => {
+    expect(
+      isPdfFile(new File(["pdf"], "paper.pdf", { type: "" })),
+    ).toBe(true);
+    expect(
+      isPdfFile(new File(["pdf"], "paper.bin", { type: "application/pdf" })),
+    ).toBe(true);
+    expect(
+      isPdfFile(new File(["pdf"], "paper.txt", { type: "text/plain" })),
     ).toBe(false);
   });
 
@@ -49,6 +63,42 @@ describe("attachment helpers", () => {
     await expect(prepareComposerAttachments([file])).resolves.toMatchObject({
       attachments: [],
       rejected: ["huge.png: image is larger than 4MB."],
+    });
+  });
+
+  it("converts PDFs into PDF data attachment parts", async () => {
+    const file = new File(["%PDF-1.7"], "paper.pdf", { type: "application/pdf" });
+
+    await expect(prepareComposerAttachments([file])).resolves.toMatchObject({
+      attachments: [
+        {
+          filename: "paper.pdf",
+          kind: "pdf",
+          mediaType: "application/pdf",
+          part: {
+            data: {
+              dataUrl: "data:application/pdf;base64,JVBERi0xLjc=",
+              filename: "paper.pdf",
+              mediaType: "application/pdf",
+            },
+            type: "data-attachment-pdf",
+          },
+        },
+      ],
+      rejected: [],
+    });
+  });
+
+  it("rejects oversized PDFs", async () => {
+    const file = new File(
+      [new Uint8Array(MAX_PDF_ATTACHMENT_BYTES + 1)],
+      "huge.pdf",
+      { type: "application/pdf" },
+    );
+
+    await expect(prepareComposerAttachments([file])).resolves.toMatchObject({
+      attachments: [],
+      rejected: ["huge.pdf: PDF is larger than 10MB."],
     });
   });
 

@@ -83,6 +83,31 @@ describe("model message part conversion", () => {
     });
   });
 
+  it("converts PDF attachment data parts into model file bytes", () => {
+    const modelPart = convertAttachmentDataPart({
+      data: {
+        dataUrl: "data:application/pdf;base64,JVBERi0xLjc=",
+        filename: "paper.pdf",
+        mediaType: "application/pdf",
+      },
+      type: "data-attachment-pdf",
+    });
+
+    expect(modelPart).toMatchObject({
+      filename: "paper.pdf",
+      mediaType: "application/pdf",
+      type: "file",
+    });
+
+    if (!modelPart || modelPart.type !== "file") {
+      throw new Error("Expected model file part.");
+    }
+
+    expect(Array.from(modelPart.data as Uint8Array)).toEqual([
+      37, 80, 68, 70, 45, 49, 46, 55,
+    ]);
+  });
+
   it("rejects malformed image attachment data URLs", () => {
     expect(() =>
       convertAttachmentDataPart({

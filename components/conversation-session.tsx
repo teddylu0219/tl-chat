@@ -42,10 +42,12 @@ import { APP_NAME } from "@/lib/app-config";
 import {
   MAX_ATTACHMENTS,
   MAX_IMAGE_ATTACHMENT_BYTES,
+  MAX_PDF_ATTACHMENT_BYTES,
   MAX_TEXT_ATTACHMENT_CHARS,
   type ComposerAttachment,
   canPreviewImageInBrowser,
   createImagePreviewUrl,
+  isAttachmentPdfPart,
   isAttachmentTextPart,
   prepareComposerAttachments,
 } from "@/lib/attachments";
@@ -91,6 +93,7 @@ type ConversationSessionProps = {
 const CHAT_STREAM_THROTTLE_MS = 120;
 const COMPOSER_ATTACHMENT_HELP_ID = "composer-attachment-help";
 const IMAGE_ATTACHMENT_LIMIT_MB = MAX_IMAGE_ATTACHMENT_BYTES / 1024 / 1024;
+const PDF_ATTACHMENT_LIMIT_MB = MAX_PDF_ATTACHMENT_BYTES / 1024 / 1024;
 const LARGE_MESSAGE_RICH_RENDER_THRESHOLD = 2400;
 const TEXT_ATTACHMENT_LIMIT_LABEL = `${Math.round(MAX_TEXT_ATTACHMENT_CHARS / 1000)}k`;
 
@@ -633,6 +636,8 @@ function PendingAttachmentCard({
             ? previewFailed
               ? formatMediaTypeLabel(attachment.mediaType)
               : "Image"
+            : attachment.kind === "pdf"
+              ? "PDF"
             : "Text context"}
         </span>
       </span>
@@ -650,10 +655,11 @@ function PendingAttachmentCard({
 
 function MessageAttachments({ message }: { message: UIMessage }) {
   const fileParts = message.parts.filter((part) => part.type === "file");
+  const pdfAttachments = message.parts.filter(isAttachmentPdfPart);
   const textAttachments = message.parts.filter(isAttachmentTextPart);
   const isUser = message.role === "user";
 
-  if (fileParts.length === 0 && textAttachments.length === 0) {
+  if (fileParts.length === 0 && pdfAttachments.length === 0 && textAttachments.length === 0) {
     return null;
   }
 
@@ -690,6 +696,20 @@ function MessageAttachments({ message }: { message: UIMessage }) {
               ? "border-white/15 bg-white/10 text-white"
               : "border-[color:var(--border)] bg-[color:var(--surface-muted)]"
           }`}
+        >
+          <FileText className="h-3.5 w-3.5" />
+          {part.data.filename}
+        </div>
+      ))}
+      {pdfAttachments.map((part) => (
+        <div
+          key={part.id}
+          className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs ${
+            isUser
+              ? "border-white/15 bg-white/10 text-white"
+              : "border-[color:var(--border)] bg-[color:var(--surface-muted)]"
+          }`}
+          data-testid="message-pdf-attachment"
         >
           <FileText className="h-3.5 w-3.5" />
           {part.data.filename}
@@ -1401,7 +1421,7 @@ export function ConversationSession({
             ref={fileInputRef}
             className="hidden"
             multiple
-            accept="image/*,.txt,.md,.markdown,.csv,.json,.jsonl,.ts,.tsx,.js,.jsx,.css,.html,.xml,.yml,.yaml"
+            accept="image/*,application/pdf,.pdf,.txt,.md,.markdown,.csv,.json,.jsonl,.ts,.tsx,.js,.jsx,.css,.html,.xml,.yml,.yaml"
             data-testid="composer-file-input"
             type="file"
             onChange={(event) => {
@@ -1434,8 +1454,9 @@ export function ConversationSession({
             className="sr-only"
           >
             Attach up to {MAX_ATTACHMENTS} files: images up to{" "}
-            {IMAGE_ATTACHMENT_LIMIT_MB}MB each, plus Markdown, text, CSV,
-            JSON/YAML, HTML/CSS/JS/TS files up to {TEXT_ATTACHMENT_LIMIT_LABEL} chars.
+            {IMAGE_ATTACHMENT_LIMIT_MB}MB each, PDFs up to{" "}
+            {PDF_ATTACHMENT_LIMIT_MB}MB each, plus Markdown, text, CSV, JSON/YAML,
+            HTML/CSS/JS/TS files up to {TEXT_ATTACHMENT_LIMIT_LABEL} chars.
           </p>
 
           <textarea

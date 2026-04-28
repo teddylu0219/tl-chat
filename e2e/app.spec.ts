@@ -131,6 +131,54 @@ test("renders HEIC previews and keeps the composer quiet", async ({
   );
 });
 
+test("uploads PDFs as model-readable attachments", async ({ page }) => {
+  let capturedRequest: {
+    messages?: Array<{
+      parts?: Array<{ data?: { filename?: string }; type?: string }>;
+    }>;
+  } | null = null;
+
+  await page.route("**/api/chat", async (route) => {
+    capturedRequest = route.request().postDataJSON() as typeof capturedRequest;
+    await route.continue();
+  });
+
+  await page.goto("/");
+  await configureLocalKey(page);
+
+  await page.getByTestId("composer-file-input").setInputFiles({
+    buffer: Buffer.from("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n"),
+    mimeType: "application/pdf",
+    name: "syllabus.pdf",
+  });
+
+  await expect(page.getByTestId("pending-attachment")).toContainText(
+    "syllabus.pdf",
+  );
+  await expect(page.getByTestId("pending-attachment")).toContainText("PDF");
+
+  await page.getByTestId("composer-input").fill("Summarize this PDF.");
+  await page.getByTestId("send-button").click();
+
+  const userMessage = page.getByTestId("message-user").last();
+  await expect(userMessage.getByTestId("message-pdf-attachment")).toContainText(
+    "syllabus.pdf",
+  );
+  await expect(page.getByTestId("message-assistant").last()).toContainText(
+    "Summarize this PDF.",
+  );
+  expect(capturedRequest?.messages?.at(-1)?.parts).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        data: expect.objectContaining({
+          filename: "syllabus.pdf",
+        }),
+        type: "data-attachment-pdf",
+      }),
+    ]),
+  );
+});
+
 test("sends web-enabled chat requests from the composer toggle", async ({
   page,
 }) => {

@@ -2,6 +2,7 @@ import type { FileUIPart, UIMessage } from "ai";
 
 export const MAX_ATTACHMENTS = 4;
 export const MAX_IMAGE_ATTACHMENT_BYTES = 4 * 1024 * 1024;
+export const MAX_PDF_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 export const MAX_TEXT_ATTACHMENT_CHARS = 12_000;
 
 export type AttachmentTextData = {
@@ -16,12 +17,24 @@ export type AttachmentTextPart = {
   type: "data-attachment-text";
 };
 
+export type AttachmentPdfData = {
+  dataUrl: string;
+  filename: string;
+  mediaType: "application/pdf";
+};
+
+export type AttachmentPdfPart = {
+  data: AttachmentPdfData;
+  id: string;
+  type: "data-attachment-pdf";
+};
+
 export type ComposerAttachment = {
   filename: string;
   id: string;
-  kind: "image" | "text";
+  kind: "image" | "pdf" | "text";
   mediaType: string;
-  part: AttachmentTextPart | FileUIPart;
+  part: AttachmentPdfPart | AttachmentTextPart | FileUIPart;
   previewUrl?: string;
 };
 
@@ -81,6 +94,12 @@ export function isAttachmentTextPart(
   return part.type === "data-attachment-text";
 }
 
+export function isAttachmentPdfPart(
+  part: UIMessage["parts"][number],
+): part is AttachmentPdfPart {
+  return part.type === "data-attachment-pdf";
+}
+
 export function buildAttachmentTextPart({
   filename,
   mediaType,
@@ -97,6 +116,22 @@ export function buildAttachmentTextPart({
   };
 }
 
+export function buildAttachmentPdfPart({
+  dataUrl,
+  filename,
+  mediaType,
+}: AttachmentPdfData): AttachmentPdfPart {
+  return {
+    data: {
+      dataUrl,
+      filename,
+      mediaType,
+    },
+    id: crypto.randomUUID(),
+    type: "data-attachment-pdf",
+  };
+}
+
 export function isTextLikeFile(file: File) {
   if (file.type.startsWith("text/")) {
     return true;
@@ -105,6 +140,10 @@ export function isTextLikeFile(file: File) {
   return /\.(?:txt|md|markdown|csv|json|jsonl|ts|tsx|js|jsx|css|html|xml|yml|yaml)$/i.test(
     file.name,
   );
+}
+
+export function isPdfFile(file: File) {
+  return file.type === "application/pdf" || /\.pdf$/i.test(file.name);
 }
 
 function bytesToBase64(bytes: Uint8Array) {
@@ -127,9 +166,9 @@ function bytesToBase64(bytes: Uint8Array) {
   return btoa(binary);
 }
 
-export async function readFileAsDataUrl(file: File) {
+export async function readFileAsDataUrl(file: File, mediaTypeOverride?: string) {
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const mediaType = file.type || "application/octet-stream";
+  const mediaType = mediaTypeOverride || file.type || "application/octet-stream";
 
   return `data:${mediaType};base64,${bytesToBase64(bytes)}`;
 }
@@ -178,6 +217,34 @@ export async function prepareComposerAttachments(files: FileList | File[] | null
       continue;
     }
 
+    if (isPdfFile(file)) {
+      if (file.size === 0) {
+        rejected.push(`${file.name}: PDF is empty.`);
+        continue;
+      }
+
+      if (file.size > MAX_PDF_ATTACHMENT_BYTES) {
+        rejected.push(`${file.name}: PDF is larger than 10MB.`);
+        continue;
+      }
+
+      const mediaType = "application/pdf";
+      const dataUrl = await readFileAsDataUrl(file, mediaType);
+
+      attachments.push({
+        filename: file.name,
+        id: crypto.randomUUID(),
+        kind: "pdf",
+        mediaType,
+        part: buildAttachmentPdfPart({
+          dataUrl,
+          filename: file.name,
+          mediaType,
+        }),
+      });
+      continue;
+    }
+
     if (isTextLikeFile(file)) {
       const rawText = await file.text();
       const text = rawText.slice(0, MAX_TEXT_ATTACHMENT_CHARS).trim();
@@ -201,7 +268,7 @@ export async function prepareComposerAttachments(files: FileList | File[] | null
       continue;
     }
 
-    rejected.push(`${file.name}: only images and text-like files are supported right now.`);
+    rejected.push(`${file.name}: only images, PDFs, and text-like files are supported right now.`);
   }
 
   return { attachments, rejected };

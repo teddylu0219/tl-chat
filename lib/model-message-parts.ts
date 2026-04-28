@@ -1,6 +1,6 @@
 import type { FilePart, TextPart, UIMessage } from "ai";
 
-import { MAX_IMAGE_ATTACHMENT_BYTES } from "./attachments";
+import { MAX_IMAGE_ATTACHMENT_BYTES, MAX_PDF_ATTACHMENT_BYTES } from "./attachments";
 import { RequestValidationError } from "./openrouter";
 
 type SerializableDataPart = {
@@ -15,10 +15,22 @@ type AttachmentImageData = {
   mediaType: string;
 };
 
+type AttachmentPdfData = {
+  dataUrl: string;
+  filename: string;
+  mediaType: string;
+};
+
 export type AttachmentImagePart = {
   data: AttachmentImageData;
   id?: string;
   type: "data-attachment-image";
+};
+
+export type AttachmentPdfPart = {
+  data: AttachmentPdfData;
+  id?: string;
+  type: "data-attachment-pdf";
 };
 
 function isDataUrlImageFilePart(
@@ -81,7 +93,7 @@ function parseDataUrl(dataUrl: string, fallbackMediaType: string) {
   const match = /^data:([^;,]+)?(;base64)?,([\s\S]*)$/i.exec(dataUrl);
 
   if (!match) {
-    throw new RequestValidationError("Image attachment could not be read.");
+    throw new RequestValidationError("Attachment could not be read.");
   }
 
   const mediaType = match[1]?.trim() || fallbackMediaType;
@@ -90,6 +102,12 @@ function parseDataUrl(dataUrl: string, fallbackMediaType: string) {
   const bytes = isBase64
     ? bytesFromBase64(payload)
     : new TextEncoder().encode(decodeURIComponent(payload));
+
+  return { bytes, mediaType };
+}
+
+function parseImageDataUrl(dataUrl: string, fallbackMediaType: string) {
+  const { bytes, mediaType } = parseDataUrl(dataUrl, fallbackMediaType);
 
   if (!mediaType.startsWith("image/")) {
     throw new RequestValidationError("Only image attachments can be sent as vision input.");
@@ -101,6 +119,24 @@ function parseDataUrl(dataUrl: string, fallbackMediaType: string) {
 
   if (bytes.byteLength > MAX_IMAGE_ATTACHMENT_BYTES) {
     throw new RequestValidationError("Image attachment is larger than 4MB.");
+  }
+
+  return { bytes, mediaType };
+}
+
+function parsePdfDataUrl(dataUrl: string, fallbackMediaType: string) {
+  const { bytes, mediaType } = parseDataUrl(dataUrl, fallbackMediaType);
+
+  if (mediaType !== "application/pdf") {
+    throw new RequestValidationError("Only PDF attachments can be sent as PDF input.");
+  }
+
+  if (bytes.byteLength === 0) {
+    throw new RequestValidationError("PDF attachment is empty.");
+  }
+
+  if (bytes.byteLength > MAX_PDF_ATTACHMENT_BYTES) {
+    throw new RequestValidationError("PDF attachment is larger than 10MB.");
   }
 
   return { bytes, mediaType };
@@ -128,6 +164,28 @@ function parseAttachmentImageData(data: unknown): AttachmentImageData {
   };
 }
 
+function parseAttachmentPdfData(data: unknown): AttachmentPdfData {
+  if (!data || typeof data !== "object") {
+    throw new RequestValidationError("PDF attachment metadata is invalid.");
+  }
+
+  const attachment = data as Partial<AttachmentPdfData>;
+
+  if (
+    typeof attachment.dataUrl !== "string" ||
+    typeof attachment.filename !== "string" ||
+    typeof attachment.mediaType !== "string"
+  ) {
+    throw new RequestValidationError("PDF attachment metadata is invalid.");
+  }
+
+  return {
+    dataUrl: attachment.dataUrl,
+    filename: attachment.filename,
+    mediaType: attachment.mediaType,
+  };
+}
+
 export function convertAttachmentDataPart(
   part: SerializableDataPart,
 ): FilePart | TextPart | undefined {
@@ -149,12 +207,27 @@ export function convertAttachmentDataPart(
     };
   }
 
+  if (part.type === "data-attachment-pdf") {
+    const attachment = parseAttachmentPdfData(part.data);
+    const { bytes, mediaType } = parsePdfDataUrl(
+      attachment.dataUrl,
+      attachment.mediaType,
+    );
+
+    return {
+      data: bytes,
+      filename: attachment.filename,
+      mediaType,
+      type: "file",
+    };
+  }
+
   if (part.type !== "data-attachment-image") {
     return undefined;
   }
 
   const attachment = parseAttachmentImageData(part.data);
-  const { bytes, mediaType } = parseDataUrl(
+  const { bytes, mediaType } = parseImageDataUrl(
     attachment.dataUrl,
     attachment.mediaType,
   );

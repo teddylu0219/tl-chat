@@ -45,6 +45,48 @@ export function appendOpenRouterWebTools(requestBody: Record<string, unknown>) {
   };
 }
 
+export function appendOpenRouterPdfPlugin(requestBody: Record<string, unknown>) {
+  const existingPlugins = Array.isArray(requestBody.plugins)
+    ? requestBody.plugins
+    : [];
+  const hasPdfParserPlugin = existingPlugins.some(
+    (plugin) =>
+      plugin &&
+      typeof plugin === "object" &&
+      "id" in plugin &&
+      plugin.id === "file-parser",
+  );
+
+  if (hasPdfParserPlugin) {
+    return requestBody;
+  }
+
+  return {
+    ...requestBody,
+    plugins: [
+      ...existingPlugins,
+      {
+        id: "file-parser",
+        pdf: {
+          engine: "cloudflare-ai",
+        },
+      },
+    ],
+  };
+}
+
+export function transformOpenRouterRequestBody({
+  requestBody,
+  webToolsEnabled,
+}: {
+  requestBody: Record<string, unknown>;
+  webToolsEnabled?: boolean;
+}) {
+  const withPdfPlugin = appendOpenRouterPdfPlugin(requestBody);
+
+  return webToolsEnabled ? appendOpenRouterWebTools(withPdfPlugin) : withPdfPlugin;
+}
+
 export function createOpenRouterProvider(
   apiKey: string,
   requestUrl?: string,
@@ -60,9 +102,11 @@ export function createOpenRouterProvider(
       "X-Title": APP_NAME,
     },
     name: "openrouter",
-    transformRequestBody: webTools?.enabled
-      ? appendOpenRouterWebTools
-      : undefined,
+    transformRequestBody: (requestBody) =>
+      transformOpenRouterRequestBody({
+        requestBody,
+        webToolsEnabled: webTools?.enabled,
+      }),
   });
 }
 
