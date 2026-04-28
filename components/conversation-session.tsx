@@ -11,6 +11,7 @@ import {
   FileText,
   Globe2,
   ImageIcon,
+  Languages,
   LoaderCircle,
   Menu,
   Mic,
@@ -96,6 +97,15 @@ const IMAGE_ATTACHMENT_LIMIT_MB = MAX_IMAGE_ATTACHMENT_BYTES / 1024 / 1024;
 const PDF_ATTACHMENT_LIMIT_MB = MAX_PDF_ATTACHMENT_BYTES / 1024 / 1024;
 const LARGE_MESSAGE_RICH_RENDER_THRESHOLD = 2400;
 const TEXT_ATTACHMENT_LIMIT_LABEL = `${Math.round(MAX_TEXT_ATTACHMENT_CHARS / 1000)}k`;
+const VOICE_LANGUAGE_OPTIONS = [
+  { label: "Auto", value: "auto" },
+  { label: "繁中", value: "zh-TW" },
+  { label: "简中", value: "zh-CN" },
+  { label: "EN", value: "en-US" },
+  { label: "日本語", value: "ja-JP" },
+  { label: "한국어", value: "ko-KR" },
+];
+const VOICE_WAVEFORM_WEIGHTS = [0.5, 0.8, 1, 0.75, 0.55];
 
 type RouteMetadata = {
   routeMode?: string;
@@ -653,6 +663,52 @@ function PendingAttachmentCard({
   );
 }
 
+function VoiceInputCapsule({
+  audioLevel,
+  isRefining,
+  transcript,
+}: Readonly<{
+  audioLevel: number;
+  isRefining: boolean;
+  transcript: string;
+}>) {
+  return (
+    <div
+      className="mb-2 inline-flex max-w-full items-center gap-3 rounded-full bg-[color:var(--accent)] px-3.5 py-2.5 text-white shadow-[0_12px_28px_rgba(122,96,73,0.18)]"
+      data-testid="voice-input-capsule"
+      role="status"
+    >
+      <div
+        aria-hidden="true"
+        className="flex h-8 w-11 shrink-0 items-center justify-center gap-1"
+      >
+        {VOICE_WAVEFORM_WEIGHTS.map((weight, index) => {
+          const height = Math.max(7, Math.round(8 + audioLevel * 24 * weight));
+
+          return (
+            <span
+              key={`${weight}-${index}`}
+              className="w-1.5 rounded-full bg-white/90 transition-[height] duration-75 ease-out"
+              data-testid="voice-level-bar"
+              style={{ height }}
+            />
+          );
+        })}
+      </div>
+      <div className="min-w-0">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-white/70">
+          {isRefining ? "Refining voice" : "Listening"}
+        </p>
+        <p className="max-w-[min(34rem,70vw)] truncate text-[13px] font-medium leading-5">
+          {isRefining
+            ? "Cleaning obvious speech recognition mistakes..."
+            : transcript || "Speak naturally. Click the mic again to insert."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function MessageAttachments({ message }: { message: UIMessage }) {
   const fileParts = message.parts.filter((part) => part.type === "file");
   const pdfAttachments = message.parts.filter(isAttachmentPdfPart);
@@ -828,6 +884,8 @@ export function ConversationSession({
   const [modelId, setModelId] = useState(conversation.modelId);
   const [pendingAttachments, setPendingAttachments] = useState<ComposerAttachment[]>([]);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [isRefiningVoice, setIsRefiningVoice] = useState(false);
+  const [voiceLanguage, setVoiceLanguage] = useState("auto");
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const isAutoScrolling = useRef(false);
   const isNearBottom = useRef(true);
@@ -840,13 +898,14 @@ export function ConversationSession({
   const processedMemoryMessageIdRef = useRef<string | null>(null);
 
   const {
+    audioLevel,
     isListening,
     isSupported: isSpeechSupported,
     startListening,
     stopListening,
     transcript,
     error: speechError,
-  } = useSpeechRecognition();
+  } = useSpeechRecognition({ language: voiceLanguage });
 
   const {
     clearError,
@@ -1029,6 +1088,7 @@ export function ConversationSession({
     modelOptions[0];
   const activeError = gateError ?? error?.message ?? (speechError || null);
   const isStreaming = status === "streaming" || status === "submitted";
+  const isVoiceBusy = isListening || isRefiningVoice;
   const assistantActivity = getAssistantActivity({
     messages,
     status,
@@ -1201,11 +1261,53 @@ export function ConversationSession({
     });
   }
 
-  function handleVoiceToggle() {
+  async function refineVoiceTranscript(rawText: string) {
+    if (!openRouterApiKey.trim()) {
+      return rawText;
+    }
+
+    setIsRefiningVoice(true);
+
+    try {
+      const response = await fetch("/api/voice-refine", {
+        body: JSON.stringify({
+          apiKey: openRouterApiKey.trim(),
+          language: voiceLanguage,
+          modelId,
+          text: rawText,
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      const payload = (await response.json()) as { text?: string };
+      return payload.text?.trim() || rawText;
+    } catch {
+      showToast("Voice refinement failed; inserted raw transcript.");
+      return rawText;
+    } finally {
+      setIsRefiningVoice(false);
+    }
+  }
+
+  async function handleVoiceToggle() {
+    if (isRefiningVoice) {
+      return;
+    }
+
     if (isListening) {
       const text = stopListening();
-      if (text.trim()) {
-        setDraft((prev) => (prev ? `${prev} ${text}` : text));
+      const trimmedText = text.trim();
+
+      if (trimmedText) {
+        const refinedText = await refineVoiceTranscript(trimmedText);
+        setDraft((prev) => (prev ? `${prev} ${refinedText}` : refinedText));
       }
     } else {
       startListening();
@@ -1430,11 +1532,12 @@ export function ConversationSession({
             }}
           />
 
-          {/* Voice transcript preview */}
-          {isListening && transcript ? (
-            <div className="mb-2 px-2.5 text-[13px] italic text-[color:var(--muted-foreground)]">
-              {transcript}
-            </div>
+          {isVoiceBusy ? (
+            <VoiceInputCapsule
+              audioLevel={audioLevel}
+              isRefining={isRefiningVoice}
+              transcript={transcript}
+            />
           ) : null}
 
           {pendingAttachments.length > 0 ? (
@@ -1528,22 +1631,44 @@ export function ConversationSession({
 
               {/* Voice input button */}
               {isSpeechSupported ? (
-                <button
-                  aria-label={isListening ? "Stop recording" : "Voice input"}
-                  className={`flex h-9 w-9 items-center justify-center rounded-full transition ${
-                    isListening
-                      ? "bg-red-500/15 text-red-500 animate-[voice-pulse_1.5s_ease-in-out_infinite]"
-                      : "text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)]"
-                  }`}
-                  type="button"
-                  onClick={handleVoiceToggle}
-                >
-                  {isListening ? (
-                    <MicOff className="h-4 w-4" />
-                  ) : (
-                    <Mic className="h-4 w-4" />
-                  )}
-                </button>
+                <>
+                  <label className="flex h-9 items-center gap-1.5 rounded-full px-2 text-[12px] text-[color:var(--muted-foreground)] transition hover:bg-[color:var(--surface-muted)]">
+                    <Languages className="h-4 w-4" />
+                    <span className="sr-only">Voice language</span>
+                    <select
+                      aria-label="Voice language"
+                      className="max-w-16 bg-transparent outline-none"
+                      data-testid="voice-language-select"
+                      disabled={isVoiceBusy}
+                      value={voiceLanguage}
+                      onChange={(event) => setVoiceLanguage(event.target.value)}
+                    >
+                      {VOICE_LANGUAGE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    aria-label={isListening ? "Stop recording" : "Voice input"}
+                    className={`flex h-9 w-9 items-center justify-center rounded-full transition ${
+                      isVoiceBusy
+                        ? "bg-[color:var(--accent)] text-white animate-[voice-pulse_1.5s_ease-in-out_infinite]"
+                        : "text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)]"
+                    }`}
+                    data-testid="voice-input-button"
+                    disabled={isRefiningVoice}
+                    type="button"
+                    onClick={() => void handleVoiceToggle()}
+                  >
+                    {isVoiceBusy ? (
+                      <MicOff className="h-4 w-4" />
+                    ) : (
+                      <Mic className="h-4 w-4" />
+                    )}
+                  </button>
+                </>
               ) : null}
 
               <button

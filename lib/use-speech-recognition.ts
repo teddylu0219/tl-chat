@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type SpeechRecognitionResult = {
+  audioLevel: number;
   error: string | null;
   isListening: boolean;
   isSupported: boolean;
@@ -44,6 +45,8 @@ interface SpeechRecognitionConstructor {
   new (): SpeechRecognitionInstance;
 }
 
+type AudioContextConstructor = typeof AudioContext;
+
 function getSpeechRecognition(): SpeechRecognitionConstructor | null {
   if (typeof window === "undefined") {
     return null;
@@ -58,12 +61,99 @@ function getSpeechRecognition(): SpeechRecognitionConstructor | null {
   );
 }
 
-export function useSpeechRecognition(): SpeechRecognitionResult {
+function getAudioContext(): AudioContextConstructor | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const win = window as unknown as Record<string, unknown>;
+
+  return (
+    (win.AudioContext as AudioContextConstructor | undefined) ??
+    (win.webkitAudioContext as AudioContextConstructor | undefined) ??
+    null
+  );
+}
+
+function getRecognitionLanguage(language: string) {
+  if (language !== "auto") {
+    return language;
+  }
+
+  return navigator.language || "zh-TW";
+}
+
+export function useSpeechRecognition({
+  language = "auto",
+}: {
+  language?: string;
+} = {}): SpeechRecognitionResult {
+  const [audioLevel, setAudioLevel] = useState(0);
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioStreamRef = useRef<MediaStream | null>(null);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const transcriptRef = useRef("");
+
+  const stopAudioMeter = useCallback(() => {
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    audioStreamRef.current?.getTracks().forEach((track) => track.stop());
+    audioStreamRef.current = null;
+
+    void audioContextRef.current?.close();
+    audioContextRef.current = null;
+    setAudioLevel(0);
+  }, []);
+
+  const startAudioMeter = useCallback(async () => {
+    const AudioContextClass = getAudioContext();
+
+    if (!AudioContextClass || !navigator.mediaDevices?.getUserMedia) {
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const audioContext = new AudioContextClass();
+      const analyser = audioContext.createAnalyser();
+      const source = audioContext.createMediaStreamSource(stream);
+
+      analyser.fftSize = 1024;
+      const samples = new Uint8Array(analyser.fftSize);
+      source.connect(analyser);
+      audioContextRef.current = audioContext;
+      audioStreamRef.current = stream;
+
+      const tick = () => {
+        analyser.getByteTimeDomainData(samples);
+
+        let sumSquares = 0;
+
+        for (const sample of samples) {
+          const normalized = (sample - 128) / 128;
+          sumSquares += normalized * normalized;
+        }
+
+        const rms = Math.sqrt(sumSquares / samples.length);
+        const nextLevel = Math.min(1, rms * 5);
+
+        setAudioLevel((currentLevel) => currentLevel * 0.55 + nextLevel * 0.45);
+        animationFrameRef.current = requestAnimationFrame(tick);
+      };
+
+      tick();
+    } catch {
+      // SpeechRecognition surfaces permission errors separately; keep dictation usable
+      // even when the decorative audio meter cannot attach to the stream.
+    }
+  }, []);
 
   // Safe to use lazy init — this hook is only used in client components
   // rendered after mount (behind isLoaded gate).
@@ -81,11 +171,13 @@ export function useSpeechRecognition(): SpeechRecognitionResult {
     setError(null);
     setTranscript("");
     transcriptRef.current = "";
+    stopAudioMeter();
+    void startAudioMeter();
 
     const recognition = new SpeechRecognitionClass();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = navigator.language || "en-US";
+    recognition.lang = getRecognitionLanguage(language);
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       let final = "";
@@ -116,32 +208,37 @@ export function useSpeechRecognition(): SpeechRecognitionResult {
           ? "Microphone access denied."
           : `Speech error: ${event.error}`,
       );
+      stopAudioMeter();
       setIsListening(false);
     };
 
     recognition.onend = () => {
+      stopAudioMeter();
       setIsListening(false);
     };
 
     recognitionRef.current = recognition;
     recognition.start();
     setIsListening(true);
-  }, []);
+  }, [language, startAudioMeter, stopAudioMeter]);
 
   const stopListening = useCallback((): string => {
     recognitionRef.current?.stop();
+    stopAudioMeter();
     setIsListening(false);
 
     return transcriptRef.current;
-  }, []);
+  }, [stopAudioMeter]);
 
   useEffect(() => {
     return () => {
       recognitionRef.current?.abort();
+      stopAudioMeter();
     };
-  }, []);
+  }, [stopAudioMeter]);
 
   return {
+    audioLevel,
     error,
     isListening,
     isSupported,

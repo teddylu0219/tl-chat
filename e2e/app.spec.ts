@@ -179,6 +179,104 @@ test("uploads PDFs as model-readable attachments", async ({ page }) => {
   );
 });
 
+test("records voice input and conservatively refines the transcript", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    class FakeSpeechRecognition extends EventTarget {
+      continuous = false;
+      interimResults = false;
+      lang = "";
+      onend: (() => void) | null = null;
+      onerror: ((event: Event) => void) | null = null;
+      onresult: ((event: Event) => void) | null = null;
+
+      abort() {
+        this.onend?.();
+      }
+
+      start() {
+        window.setTimeout(() => {
+          this.onresult?.({
+            results: {
+              0: {
+                0: { transcript: "請用配森處理杰森" },
+                isFinal: true,
+              },
+              length: 1,
+            },
+          } as unknown as Event);
+        }, 25);
+      }
+
+      stop() {
+        this.onend?.();
+      }
+    }
+
+    class FakeAudioContext {
+      createAnalyser() {
+        return {
+          fftSize: 1024,
+          getByteTimeDomainData(samples: Uint8Array) {
+            samples.fill(132);
+          },
+        };
+      }
+
+      createMediaStreamSource() {
+        return {
+          connect() {},
+        };
+      }
+
+      close() {
+        return Promise.resolve();
+      }
+    }
+
+    Object.defineProperty(window, "webkitSpeechRecognition", {
+      configurable: true,
+      value: FakeSpeechRecognition,
+    });
+    Object.defineProperty(window, "SpeechRecognition", {
+      configurable: true,
+      value: FakeSpeechRecognition,
+    });
+    Object.defineProperty(window, "AudioContext", {
+      configurable: true,
+      value: FakeAudioContext,
+    });
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: async () => ({
+          getTracks: () => [{ stop() {} }],
+        }),
+      },
+    });
+  });
+
+  await page.goto("/");
+  await configureLocalKey(page);
+
+  await page.getByTestId("voice-language-select").selectOption("zh-TW");
+  await page.getByTestId("voice-input-button").click();
+
+  await expect(page.getByTestId("voice-input-capsule")).toContainText(
+    "Listening",
+  );
+  await expect(page.getByTestId("voice-input-capsule")).toContainText(
+    "請用配森處理杰森",
+  );
+
+  await page.getByTestId("voice-input-button").click();
+
+  await expect(page.getByTestId("composer-input")).toHaveValue(
+    "請用Python處理JSON",
+  );
+});
+
 test("sends web-enabled chat requests from the composer toggle", async ({
   page,
 }) => {
