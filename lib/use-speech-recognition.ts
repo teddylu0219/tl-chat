@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 type SpeechRecognitionResult = {
   audioLevel: number;
@@ -83,12 +83,29 @@ function getRecognitionLanguage(language: string) {
   return navigator.language || "zh-TW";
 }
 
+function getSpeechSupportSnapshot() {
+  return getSpeechRecognition() !== null;
+}
+
+function getServerSpeechSupportSnapshot() {
+  return false;
+}
+
+function subscribeToSpeechSupport() {
+  return () => {};
+}
+
 export function useSpeechRecognition({
   language = "auto",
 }: {
   language?: string;
 } = {}): SpeechRecognitionResult {
   const [audioLevel, setAudioLevel] = useState(0);
+  const isSupported = useSyncExternalStore(
+    subscribeToSpeechSupport,
+    getSpeechSupportSnapshot,
+    getServerSpeechSupportSnapshot,
+  );
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -155,16 +172,11 @@ export function useSpeechRecognition({
     }
   }, []);
 
-  // Safe to use lazy init — this hook is only used in client components
-  // rendered after mount (behind isLoaded gate).
-  const [isSupported] = useState(() =>
-    typeof window !== "undefined" ? getSpeechRecognition() !== null : false,
-  );
-
   const startListening = useCallback(() => {
     const SpeechRecognitionClass = getSpeechRecognition();
 
     if (!SpeechRecognitionClass) {
+      setError("Voice input is not supported in this browser. Try Chrome or Safari.");
       return;
     }
 

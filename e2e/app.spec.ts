@@ -277,6 +277,35 @@ test("records voice input and conservatively refines the transcript", async ({
   );
 });
 
+test("keeps the mic button visible when speech recognition is unavailable", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "SpeechRecognition", {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(window, "webkitSpeechRecognition", {
+      configurable: true,
+      value: undefined,
+    });
+  });
+
+  await page.goto("/");
+
+  const voiceButton = page.getByTestId("voice-input-button");
+  await expect(voiceButton).toBeVisible();
+  await expect(voiceButton).toHaveAttribute(
+    "aria-label",
+    "Voice input is not supported in this browser",
+  );
+
+  await voiceButton.click();
+  await expect(
+    page.getByText("Voice input needs Chrome or Safari Web Speech support."),
+  ).toBeVisible();
+});
+
 test("sends web-enabled chat requests from the composer toggle", async ({
   page,
 }) => {

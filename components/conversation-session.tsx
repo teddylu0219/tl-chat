@@ -1301,6 +1301,11 @@ export function ConversationSession({
       return;
     }
 
+    if (!isSpeechSupported) {
+      showToast("Voice input needs Chrome or Safari Web Speech support.");
+      return;
+    }
+
     if (isListening) {
       const text = stopListening();
       const trimmedText = text.trim();
@@ -1629,9 +1634,8 @@ export function ConversationSession({
                 <Paperclip className="h-4 w-4" />
               </button>
 
-              {/* Voice input button */}
-              {isSpeechSupported ? (
-                <>
+              <div className="flex items-center gap-1">
+                {isSpeechSupported ? (
                   <label className="flex h-9 items-center gap-1.5 rounded-full px-2 text-[12px] text-[color:var(--muted-foreground)] transition hover:bg-[color:var(--surface-muted)]">
                     <Languages className="h-4 w-4" />
                     <span className="sr-only">Voice language</span>
@@ -1650,26 +1654,38 @@ export function ConversationSession({
                       ))}
                     </select>
                   </label>
-                  <button
-                    aria-label={isListening ? "Stop recording" : "Voice input"}
-                    className={`flex h-9 w-9 items-center justify-center rounded-full transition ${
-                      isVoiceBusy
-                        ? "bg-[color:var(--accent)] text-white animate-[voice-pulse_1.5s_ease-in-out_infinite]"
-                        : "text-[color:var(--muted-foreground)] hover:text-[color:var(--foreground)]"
-                    }`}
-                    data-testid="voice-input-button"
-                    disabled={isRefiningVoice}
-                    type="button"
-                    onClick={() => void handleVoiceToggle()}
-                  >
-                    {isVoiceBusy ? (
-                      <MicOff className="h-4 w-4" />
-                    ) : (
-                      <Mic className="h-4 w-4" />
-                    )}
-                  </button>
-                </>
-              ) : null}
+                ) : null}
+                <button
+                  aria-label={
+                    isSpeechSupported
+                      ? isListening
+                        ? "Stop recording"
+                        : "Voice input"
+                      : "Voice input is not supported in this browser"
+                  }
+                  className={`flex h-9 w-9 items-center justify-center rounded-full transition ${
+                    isVoiceBusy
+                      ? "bg-[color:var(--accent)] text-white animate-[voice-pulse_1.5s_ease-in-out_infinite]"
+                      : isSpeechSupported
+                        ? "text-[color:var(--muted-foreground)] hover:bg-[color:var(--surface-muted)] hover:text-[color:var(--foreground)]"
+                        : "text-[color:var(--muted-foreground)] opacity-70 hover:bg-[color:var(--surface-muted)] hover:opacity-100"
+                  }`}
+                  data-testid="voice-input-button"
+                  title={
+                    isSpeechSupported
+                      ? "Voice input"
+                      : "Voice input needs Chrome or Safari Web Speech support."
+                  }
+                  type="button"
+                  onClick={() => void handleVoiceToggle()}
+                >
+                  {isVoiceBusy ? (
+                    <MicOff className="h-4 w-4" />
+                  ) : (
+                    <Mic className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
 
               <button
                 className="flex items-center gap-1.5 text-[13px] text-[color:var(--muted-foreground)] transition hover:text-[color:var(--foreground)]"
