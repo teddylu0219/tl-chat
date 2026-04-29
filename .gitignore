@@ -28,6 +28,13 @@
 *.pem
 AGENTS.md
 CLAUDE.md
+PLAN.md
+PROGRESS.md
+PROMPT.md
+TODO.md
+progress.json
+/screenshots/
+/output/
 
 # debug
 npm-debug.log*
